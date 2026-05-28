@@ -1,0 +1,21 @@
+/* src/components/TermsOfUse.css */
+body{
+    background: #F9FAFB;
+}
+section h2 {
+    margin-top: 1.5rem;
+    color: #333;
+}
+
+section p,
+section li {
+    color: #555;
+}
+
+section a {
+    color: #0066cc;
+}
+
+section a:hover {
+    text-decoration: underline;
+}
