@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Modal, Button, Form } from 'react-bootstrap';
 import { FaGoogle } from 'react-icons/fa';
+import API_URL from '../api';
 
 const SignInModal = () => {
     const [showLogin, setShowLogin] = useState(false);
@@ -21,11 +22,11 @@ const SignInModal = () => {
         e.preventDefault();
 
         try {
-            const res = await fetch('http://localhost/reviewer_app/api/login/login', {
+            const res = await fetch(`${API_URL}/api/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include', // ⬅️ Important for session cookies
-                body: JSON.stringify({ username, password })
+                credentials: 'include',
+                body: JSON.stringify({ user_name: username, user_pass: password })
             });
 
             const data = await res.json();

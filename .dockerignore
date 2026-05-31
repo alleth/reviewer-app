@@ -1,0 +1,8 @@
+vendor/
+tmp/
+logs/
+.git/
+.github/
+config/app_local.php
+.env
+*.md

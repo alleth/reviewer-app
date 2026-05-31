@@ -35,6 +35,19 @@ class UsersController extends AppController
             ->withStringBody(json_encode($response));
     }
 
+    public function session(): \Cake\Http\Response
+    {
+        $user = $this->request->getSession()->read('Auth.User');
+
+        return $this->response
+            ->withType('application/json')
+            ->withStringBody(json_encode([
+                'success' => true,
+                'loggedIn' => $user !== null,
+                'user' => $user,
+            ]));
+    }
+
     public function register()
     {
         $this->request->allowMethod(['post']);

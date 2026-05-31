@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { Form, Button, Alert } from 'react-bootstrap';
 import { FcGoogle } from 'react-icons/fc';
+import API_URL from '../api';
 
 function LoginPage({ mode = 'login', onClose }) {
     const [formData, setFormData] = useState({
@@ -21,9 +22,9 @@ function LoginPage({ mode = 'login', onClose }) {
     const handleLogin = async (e) => {
         e.preventDefault();
         try {
-            const res = await axios.post('http://localhost/reviewer_app/api/login', {
-                username: formData.username,
-                password: formData.password
+            const res = await axios.post(`${API_URL}/api/login`, {
+                user_name: formData.username,
+                user_pass: formData.password
             }, { withCredentials: true });
 
             if (res.data.success) {
@@ -45,11 +46,12 @@ function LoginPage({ mode = 'login', onClose }) {
         }
 
         try {
-            const res = await axios.post('http://localhost/reviewer_app/api/register', {
+            const res = await axios.post(`${API_URL}/api/register`, {
                 fname: formData.fname,
                 lname: formData.lname,
                 email: formData.email,
-                password: formData.password
+                user_name: formData.username,
+                user_pass: formData.password
             });
 
             if (res.data.success) {
