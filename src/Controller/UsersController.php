@@ -52,28 +52,30 @@ class UsersController extends AppController
     {
         $this->request->allowMethod(['post']);
 
-        $this->response = $this->response
-            ->withHeader('Access-Control-Allow-Origin', 'http://localhost:3000')
-            ->withHeader('Access-Control-Allow-Credentials', 'true')
-            ->withHeader('Access-Control-Allow-Headers', 'Content-Type')
-            ->withHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+        try {
+            $data = $this->request->getData();
 
-        $data = $this->request->getData();
+            $data['fname'] = $data['fname'] ?? '';
+            $data['lname'] = $data['lname'] ?? '';
+            $data['email'] = $data['email'] ?? '';
+            $data['user_name'] = $data['user_name'] ?? '';
+            $data['user_pass'] = password_hash($data['user_pass'] ?? '', PASSWORD_DEFAULT);
 
-        $data['fname'] = $data['fname'] ?? '';
-        $data['lname'] = $data['lname'] ?? '';
-        $data['email'] = $data['email'] ?? '';
-        $data['user_name'] = $data['user_name'] ?? '';
-        $data['user_pass'] = password_hash($data['user_pass'], PASSWORD_DEFAULT);
+            $user = $this->Users->newEmptyEntity();
+            $user = $this->Users->patchEntity($user, $data);
 
-        $user = $this->Users->newEmptyEntity();
-        $user = $this->Users->patchEntity($user, $data);
+            if ($this->Users->save($user)) {
+                $response = ['success' => true, 'user' => $user];
+            } else {
+                $response = ['success' => false, 'errors' => $user->getErrors()];
+            }
+        } catch (\Exception $e) {
+            $response = ['success' => false, 'error' => $e->getMessage()];
 
-        if ($this->Users->save($user)) {
-            $response = ['success' => true, 'user' => $user];
-        } else {
-            \Cake\Log::write('error', print_r($user->getErrors(), true));
-            $response = ['success' => false, 'errors' => $user->getErrors()];
+            return $this->response
+                ->withStatus(500)
+                ->withType('application/json')
+                ->withStringBody(json_encode($response));
         }
 
         return $this->response
