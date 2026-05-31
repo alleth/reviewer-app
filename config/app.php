@@ -413,6 +413,11 @@ return [
      */
     'Session' => [
         'defaults' => 'php',
+        'ini' => [
+            'session.cookie_samesite' => 'None',
+            'session.cookie_secure' => 1,
+            'session.cookie_httponly' => 1,
+        ],
     ],
 
     /**
