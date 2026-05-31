@@ -280,6 +280,7 @@ return [
          * in app_local.php depending on the application's needs.
          */
         'default' => [
+            'url' => env('DATABASE_URL', null),
             'className' => Connection::class,
             'driver' => Mysql::class,
             'persistent' => false,
