@@ -35,6 +35,15 @@ class UsersController extends AppController
             ->withStringBody(json_encode($response));
     }
 
+    public function logout(): \Cake\Http\Response
+    {
+        $this->request->getSession()->destroy();
+
+        return $this->response
+            ->withType('application/json')
+            ->withStringBody(json_encode(['success' => true]));
+    }
+
     public function session(): \Cake\Http\Response
     {
         $user = $this->request->getSession()->read('Auth.User');
