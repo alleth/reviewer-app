@@ -10,7 +10,6 @@ use Cake\Datasource\FactoryLocator;
 use Cake\Error\Middleware\ErrorHandlerMiddleware;
 use Cake\Http\BaseApplication;
 use Cake\Http\Middleware\BodyParserMiddleware;
-use Cake\Http\Middleware\CsrfProtectionMiddleware;
 use Cake\Http\MiddlewareQueue;
 use Cake\ORM\Locator\TableLocator;
 use Cake\Routing\Middleware\AssetMiddleware;
@@ -36,13 +35,7 @@ class Application extends BaseApplication
                 'cacheTime' => Configure::read('Asset.cacheTime'),
             ]))
             ->add(new RoutingMiddleware($this))
-            ->add(new BodyParserMiddleware()) // To parse body content
-            ->add(new CsrfProtectionMiddleware([
-                'httponly' => true,
-                'skipCheckCallback' => function ($request) {
-                    return str_starts_with($request->getPath(), '/api/');
-                },
-            ]));
+            ->add(new BodyParserMiddleware());
 
         return $middlewareQueue;
     }
