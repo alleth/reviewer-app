@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, Button, Form } from 'react-bootstrap';
-import { FaGoogle } from 'react-icons/fa';
+import { GoogleLogin } from '@react-oauth/google';
 import API_URL from '../api';
 
 const SignInModal = () => {
@@ -44,8 +44,28 @@ const SignInModal = () => {
         }
     };
 
-    const handleGoogleLogin = () => {
-        alert('Redirecting to Google login...');
+    const handleGoogleSuccess = async (credentialResponse) => {
+        try {
+            const res = await fetch(`${API_URL}/api/google-login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ credential: credentialResponse.credential })
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+                localStorage.setItem('skillsprint_user', JSON.stringify(data.user));
+                handleLoginClose();
+                window.location.href = '/';
+            } else {
+                alert(data.message || 'Google sign-in failed');
+            }
+        } catch (error) {
+            console.error('Google sign-in error:', error);
+            alert('Error connecting to server.');
+        }
     };
 
     const handleForgotSubmit = (e) => {
@@ -119,27 +139,13 @@ const SignInModal = () => {
 
                         <div className="text-center text-muted mb-3">or</div>
 
-                        <Button
-                            className="w-100"
-                            onClick={handleGoogleLogin}
-                            style={{
-                                borderColor: '#6B7280',
-                                color: '#6B7280',
-                                backgroundColor: '#F9FAFB',
-                                transition: 'all 0.2s ease-in-out',
-                            }}
-                            onMouseEnter={e => {
-                                e.target.style.backgroundColor = '#6B7280';
-                                e.target.style.color = '#F9FAFB';
-                            }}
-                            onMouseLeave={e => {
-                                e.target.style.backgroundColor = '#F9FAFB';
-                                e.target.style.color = '#6B7280';
-                            }}
-                        >
-                            <FaGoogle className="me-2" />
-                            Continue with Google
-                        </Button>
+                        <div className="d-flex justify-content-center">
+                            <GoogleLogin
+                                onSuccess={handleGoogleSuccess}
+                                onError={() => alert('Google sign-in was cancelled.')}
+                                width="320"
+                            />
+                        </div>
                     </Form>
                 </Modal.Body>
             </Modal>

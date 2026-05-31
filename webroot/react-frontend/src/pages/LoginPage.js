@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { Form, Button, Alert } from 'react-bootstrap';
-import { FcGoogle } from 'react-icons/fc';
+import { GoogleLogin } from '@react-oauth/google';
 import API_URL from '../api';
 
 function LoginPage({ mode = 'login', onClose }) {
@@ -73,8 +73,25 @@ function LoginPage({ mode = 'login', onClose }) {
         }
     };
 
-    const handleGoogleAuth = () => {
-        alert('Google authentication not yet implemented.');
+    const handleGoogleSuccess = async (credentialResponse) => {
+        try {
+            const res = await axios.post(`${API_URL}/api/google-login`, {
+                credential: credentialResponse.credential,
+            }, { withCredentials: true });
+
+            if (res.data.success) {
+                localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));
+                window.location.href = '/';
+            } else {
+                setError(res.data.message || 'Google sign-in failed');
+            }
+        } catch (err) {
+            setError('Google sign-in failed. Please try again.');
+        }
+    };
+
+    const handleGoogleError = () => {
+        setError('Google sign-in was cancelled or failed.');
     };
 
     return (
@@ -213,22 +230,14 @@ function LoginPage({ mode = 'login', onClose }) {
                 OR
             </div>
 
-            <Button
-                variant="outline-dark"
-                onClick={handleGoogleAuth}
-                style={{
-                    borderRadius: '0.5rem',
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '0.95rem',
-                    borderColor: '#D1D5DB'
-                }}
-            >
-                <FcGoogle style={{ marginRight: '8px', fontSize: '1.2rem' }} />
-                Continue with Google
-            </Button>
+            <div className="d-flex justify-content-center">
+                <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={handleGoogleError}
+                    text={mode === 'signup' ? 'signup_with' : 'continue_with'}
+                    width="320"
+                />
+            </div>
 
             {mode === 'signup' && (
                 <div className="text-center mt-4" style={{ fontSize: '0.75rem', color: '#6B7280' }}>

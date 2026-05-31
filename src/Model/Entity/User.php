@@ -32,5 +32,6 @@ class User extends Entity
         'email' => true,
         'user_name' => true,
         'user_pass' => true,
+        'google_id' => true,
     ];
 }

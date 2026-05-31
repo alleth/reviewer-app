@@ -35,6 +35,90 @@ class UsersController extends AppController
             ->withStringBody(json_encode($response));
     }
 
+    public function googleLogin(): \Cake\Http\Response
+    {
+        $this->request->allowMethod(['post']);
+
+        try {
+            $credential = $this->request->getData('credential');
+            if (empty($credential)) {
+                return $this->response
+                    ->withStatus(400)
+                    ->withType('application/json')
+                    ->withStringBody(json_encode(['success' => false, 'message' => 'Missing credential']));
+            }
+
+            $clientId = env('GOOGLE_CLIENT_ID');
+            if (empty($clientId)) {
+                return $this->response
+                    ->withStatus(500)
+                    ->withType('application/json')
+                    ->withStringBody(json_encode(['success' => false, 'message' => 'Google client not configured']));
+            }
+
+            $client = new \Google_Client(['client_id' => $clientId]);
+            $payload = $client->verifyIdToken($credential);
+
+            if (!$payload) {
+                return $this->response
+                    ->withStatus(401)
+                    ->withType('application/json')
+                    ->withStringBody(json_encode(['success' => false, 'message' => 'Invalid Google token']));
+            }
+
+            $googleId = $payload['sub'];
+            $email = $payload['email'] ?? '';
+            $fname = $payload['given_name'] ?? '';
+            $lname = $payload['family_name'] ?? '';
+
+            $user = $this->Users->find()->where(['google_id' => $googleId])->first();
+
+            if (!$user) {
+                $user = $this->Users->find()->where(['email' => $email])->first();
+                if ($user) {
+                    $user->google_id = $googleId;
+                    $this->Users->save($user);
+                }
+            }
+
+            if (!$user) {
+                $userName = strstr($email, '@', true) ?: 'user' . substr($googleId, 0, 8);
+                $suffix = 0;
+                $baseName = $userName;
+                while ($this->Users->find()->where(['user_name' => $userName])->count() > 0) {
+                    $suffix++;
+                    $userName = $baseName . $suffix;
+                }
+
+                $user = $this->Users->newEntity([
+                    'fname' => $fname,
+                    'lname' => $lname,
+                    'email' => $email,
+                    'user_name' => $userName,
+                    'google_id' => $googleId,
+                ]);
+
+                if (!$this->Users->save($user)) {
+                    return $this->response
+                        ->withStatus(422)
+                        ->withType('application/json')
+                        ->withStringBody(json_encode(['success' => false, 'errors' => $user->getErrors()]));
+                }
+            }
+
+            $this->request->getSession()->write('Auth.User', $user);
+
+            return $this->response
+                ->withType('application/json')
+                ->withStringBody(json_encode(['success' => true, 'user' => $user]));
+        } catch (\Exception $e) {
+            return $this->response
+                ->withStatus(500)
+                ->withType('application/json')
+                ->withStringBody(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+    }
+
     public function logout(): \Cake\Http\Response
     {
         $session = $this->request->getSession();

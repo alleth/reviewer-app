@@ -4,6 +4,7 @@ const webpack = require('webpack');
 
 module.exports = (env, argv) => {
     const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost/reviewer_app';
+    const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
 
     return {
         entry: './src/index.js',
@@ -41,6 +42,7 @@ module.exports = (env, argv) => {
             }),
             new webpack.DefinePlugin({
                 'process.env.REACT_APP_API_URL': JSON.stringify(apiUrl),
+                'process.env.REACT_APP_GOOGLE_CLIENT_ID': JSON.stringify(googleClientId),
             }),
         ],
     };

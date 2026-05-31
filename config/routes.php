@@ -11,6 +11,7 @@ return function (RouteBuilder $routes): void {
     $routes->connect('/api/register', ['controller' => 'Users', 'action' => 'register']);
     $routes->connect('/api/logout', ['controller' => 'Users', 'action' => 'logout']);
     $routes->connect('/api/session', ['controller' => 'Users', 'action' => 'session']);
+    $routes->connect('/api/google-login', ['controller' => 'Users', 'action' => 'googleLogin']);
 
     // API resource routes (controllers in App\Controller\Api namespace)
     $routes->prefix('api', function (RouteBuilder $builder): void {
