@@ -1,11 +1,13 @@
 FROM php:8.2-apache
 
-# Enable mod_rewrite, MySQL, and intl extensions
+# Install system dependencies and PHP extensions
 RUN apt-get update && apt-get install -y libicu-dev libzip-dev unzip \
     && docker-php-ext-install pdo pdo_mysql intl zip \
-    && a2dismod mpm_event mpm_worker 2>/dev/null || true \
-    && a2enmod mpm_prefork rewrite \
     && rm -rf /var/lib/apt/lists/*
+
+# Fix Apache MPM conflict in its own layer so it is never skipped by cache
+RUN a2dismod mpm_event mpm_worker 2>/dev/null; \
+    a2enmod mpm_prefork rewrite
 
 # Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -14,7 +16,6 @@ ENV COMPOSER_ALLOW_SUPERUSER=1
 
 WORKDIR /var/www/reviewer_app
 
-# Copy source and install dependencies
 COPY . .
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
