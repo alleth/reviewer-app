@@ -37,4 +37,8 @@ RUN mkdir -p tmp/cache/models tmp/cache/persistent tmp/cache/views tmp/sessions 
     && chown -R www-data:www-data tmp logs \
     && chmod -R 775 tmp logs
 
+COPY docker-start.sh /usr/local/bin/docker-start.sh
+RUN chmod +x /usr/local/bin/docker-start.sh
+
 EXPOSE 80
+CMD ["/usr/local/bin/docker-start.sh"]
