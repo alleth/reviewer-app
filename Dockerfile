@@ -1,13 +1,16 @@
 FROM php:8.2-apache
 
 # Install system dependencies and PHP extensions
-RUN apt-get update && apt-get install -y libicu-dev libzip-dev unzip \
+RUN apt-get update && apt-get install -y --no-install-recommends libicu-dev libzip-dev unzip \
     && docker-php-ext-install pdo pdo_mysql intl zip \
     && rm -rf /var/lib/apt/lists/*
 
-# Fix Apache MPM conflict in its own layer so it is never skipped by cache
-RUN a2dismod mpm_event mpm_worker 2>/dev/null; \
-    a2enmod mpm_prefork rewrite
+# Fix Apache MPM conflict — directly remove conflicting MPM files
+RUN rm -f /etc/apache2/mods-enabled/mpm_event.load \
+          /etc/apache2/mods-enabled/mpm_event.conf \
+          /etc/apache2/mods-enabled/mpm_worker.load \
+          /etc/apache2/mods-enabled/mpm_worker.conf \
+    && a2enmod mpm_prefork rewrite
 
 # Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
