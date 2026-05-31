@@ -1,10 +1,11 @@
 import React from 'react';
 import { Navbar, Nav, Container, NavDropdown } from 'react-bootstrap';
+import API_URL from '../api';
 
 // This is your logout logic
 const onLogout = async () => {
     try {
-        await fetch('https://localhost/reviewer_app/api/login/logout', {
+        await fetch(`${API_URL}/api/logout`, {
             method: 'POST',
             credentials: 'include',
             headers: {
