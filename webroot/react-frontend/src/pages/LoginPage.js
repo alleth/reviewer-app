@@ -28,7 +28,7 @@ function LoginPage({ mode = 'login', onClose }) {
             }, { withCredentials: true });
 
             if (res.data.success) {
-                window.location.href = '/pages';
+                window.location.href = '/';
             } else {
                 setError('Invalid credentials');
             }
@@ -55,7 +55,7 @@ function LoginPage({ mode = 'login', onClose }) {
             });
 
             if (res.data.success) {
-                window.location.href = '/pages';
+                window.location.href = '/';
             } else {
                 setError('Registration failed');
             }
