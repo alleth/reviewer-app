@@ -57,10 +57,17 @@ function LoginPage({ mode = 'login', onClose }) {
             if (res.data.success) {
                 window.location.href = '/';
             } else {
-                setError('Registration failed');
+                const errors = res.data.errors || {};
+                if (errors.email) {
+                    setError(errors.email[Object.keys(errors.email)[0]]);
+                } else if (errors.user_name) {
+                    setError(errors.user_name[Object.keys(errors.user_name)[0]]);
+                } else {
+                    setError('Registration failed. Please check your details.');
+                }
             }
         } catch (err) {
-            setError('Error during registration');
+            setError('Could not connect to server. Please try again.');
         }
     };
 

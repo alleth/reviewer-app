@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace App\Model\Table;
 
-use Cake\ORM\Query\SelectQuery;
 use Cake\ORM\RulesChecker;
 use Cake\ORM\Table;
 use Cake\Validation\Validator;
@@ -76,5 +75,13 @@ class UsersTable extends Table
             ->allowEmptyString('user_pass');
 
         return $validator;
+    }
+
+    public function buildRules(RulesChecker $rules): RulesChecker
+    {
+        $rules->add($rules->isUnique(['email'], 'This email is already registered.'));
+        $rules->add($rules->isUnique(['user_name'], 'This username is already taken.'));
+
+        return $rules;
     }
 }
