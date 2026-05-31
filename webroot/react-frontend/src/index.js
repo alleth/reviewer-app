@@ -11,8 +11,20 @@ function AppWrapper() {
     const [isLoggedIn, setIsLoggedIn] = useState(null);
 
     useEffect(() => {
+        const stored = localStorage.getItem('skillsprint_user');
+        if (!stored) {
+            setIsLoggedIn(false);
+            return;
+        }
         axios.get(`${API_URL}/api/session?t=${Date.now()}`, { withCredentials: true })
-            .then(res => setIsLoggedIn(res.data.loggedIn))
+            .then(res => {
+                if (res.data.loggedIn) {
+                    setIsLoggedIn(true);
+                } else {
+                    localStorage.removeItem('skillsprint_user');
+                    setIsLoggedIn(false);
+                }
+            })
             .catch(() => setIsLoggedIn(false));
     }, []);
 

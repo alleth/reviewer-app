@@ -12,6 +12,7 @@ const onLogout = async () => {
                 'Content-Type': 'application/json'
             }
         });
+        localStorage.removeItem('skillsprint_user');
         window.location.href = '/';
     } catch (error) {
         console.error('Logout failed:', error);

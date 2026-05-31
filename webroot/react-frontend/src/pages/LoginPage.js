@@ -28,6 +28,7 @@ function LoginPage({ mode = 'login', onClose }) {
             }, { withCredentials: true });
 
             if (res.data.success) {
+                localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));
                 window.location.href = '/';
             } else {
                 setError('Invalid credentials');
@@ -55,6 +56,7 @@ function LoginPage({ mode = 'login', onClose }) {
             });
 
             if (res.data.success) {
+                localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));
                 window.location.href = '/';
             } else {
                 const errors = res.data.errors || {};
