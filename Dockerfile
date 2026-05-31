@@ -3,7 +3,8 @@ FROM php:8.2-apache
 # Enable mod_rewrite, MySQL, and intl extensions
 RUN apt-get update && apt-get install -y libicu-dev libzip-dev unzip \
     && docker-php-ext-install pdo pdo_mysql intl zip \
-    && a2enmod rewrite \
+    && a2dismod mpm_event mpm_worker 2>/dev/null || true \
+    && a2enmod mpm_prefork rewrite \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Composer
