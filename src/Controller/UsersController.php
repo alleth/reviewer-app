@@ -37,7 +37,9 @@ class UsersController extends AppController
 
     public function logout(): \Cake\Http\Response
     {
-        $this->request->getSession()->destroy();
+        $session = $this->request->getSession();
+        $session->delete('Auth.User');
+        $session->renew();
 
         return $this->response
             ->withType('application/json')
