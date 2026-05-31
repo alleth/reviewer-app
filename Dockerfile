@@ -22,15 +22,18 @@ WORKDIR /var/www/reviewer_app
 COPY . .
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# Point Apache document root to CakePHP's webroot/
-RUN echo '<VirtualHost *:80>\n\
+# Point Apache document root to CakePHP's webroot/ with rewrite rules inline
+RUN printf '<VirtualHost *:80>\n\
     DocumentRoot /var/www/reviewer_app/webroot\n\
     <Directory /var/www/reviewer_app/webroot>\n\
         Options -Indexes\n\
         AllowOverride All\n\
         Require all granted\n\
+        RewriteEngine On\n\
+        RewriteCond %%{REQUEST_FILENAME} !-f\n\
+        RewriteRule ^ index.php [L]\n\
     </Directory>\n\
-</VirtualHost>' > /etc/apache2/sites-available/000-default.conf
+</VirtualHost>\n' > /etc/apache2/sites-available/000-default.conf
 
 # Writable dirs CakePHP needs at runtime
 RUN mkdir -p tmp/cache/models tmp/cache/persistent tmp/cache/views tmp/sessions tmp/tests logs \
