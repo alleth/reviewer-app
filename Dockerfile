@@ -9,6 +9,8 @@ RUN apt-get update && apt-get install -y libicu-dev libzip-dev unzip \
 # Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+ENV COMPOSER_ALLOW_SUPERUSER=1
+
 WORKDIR /var/www/reviewer_app
 
 # Copy source and install dependencies
