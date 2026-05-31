@@ -1,8 +1,8 @@
 FROM php:8.2-apache
 
 # Enable mod_rewrite, MySQL, and intl extensions
-RUN apt-get update && apt-get install -y libicu-dev \
-    && docker-php-ext-install pdo pdo_mysql intl \
+RUN apt-get update && apt-get install -y libicu-dev libzip-dev unzip \
+    && docker-php-ext-install pdo pdo_mysql intl zip \
     && a2enmod rewrite \
     && rm -rf /var/lib/apt/lists/*
 
