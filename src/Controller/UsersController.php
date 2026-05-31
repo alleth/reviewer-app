@@ -70,7 +70,6 @@ class UsersController extends AppController
         $user = $this->Users->patchEntity($user, $data);
 
         if ($this->Users->save($user)) {
-            $this->request->getSession()->write('Auth.User', $user);
             $response = ['success' => true, 'user' => $user];
         } else {
             \Cake\Log::write('error', print_r($user->getErrors(), true));
