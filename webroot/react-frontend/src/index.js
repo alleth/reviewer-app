@@ -11,7 +11,7 @@ function AppWrapper() {
     const [isLoggedIn, setIsLoggedIn] = useState(null);
 
     useEffect(() => {
-        axios.get(`${API_URL}/api/session`, { withCredentials: true })
+        axios.get(`${API_URL}/api/session?t=${Date.now()}`, { withCredentials: true })
             .then(res => setIsLoggedIn(res.data.loggedIn))
             .catch(() => setIsLoggedIn(false));
     }, []);

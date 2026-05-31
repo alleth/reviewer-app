@@ -12,7 +12,7 @@ const onLogout = async () => {
                 'Content-Type': 'application/json'
             }
         });
-        window.location.reload(); // Reloads page to show App_old.js (guest view)
+        window.location.href = '/';
     } catch (error) {
         console.error('Logout failed:', error);
     }

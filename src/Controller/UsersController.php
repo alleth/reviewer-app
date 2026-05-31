@@ -50,6 +50,8 @@ class UsersController extends AppController
 
         return $this->response
             ->withType('application/json')
+            ->withHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+            ->withHeader('Pragma', 'no-cache')
             ->withStringBody(json_encode([
                 'success' => true,
                 'loggedIn' => $user !== null,
