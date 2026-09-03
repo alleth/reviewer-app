@@ -10,7 +10,7 @@ class TopicsController extends AppController
     public function initialize(): void
     {
         parent::initialize();
-        $this->loadModel('Topics');
+        $this->Topics = $this->fetchTable('Topics');
     }
 
     public function index(): void

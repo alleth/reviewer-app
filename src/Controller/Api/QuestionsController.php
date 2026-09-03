@@ -10,7 +10,7 @@ class QuestionsController extends AppController
     public function initialize(): void
     {
         parent::initialize();
-        $this->loadModel('Questions');
+        $this->Questions = $this->fetchTable('Questions');
     }
 
     public function index(): void
