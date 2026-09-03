@@ -120,8 +120,8 @@ class QuestionsController extends AppController
 
         $query = $this->Questions->find()
             ->contain(['Topics', 'Choices'])
-            ->orderByRand()
             ->limit($limit);
+        $query->orderBy($query->func()->rand());
 
         if ($topicId !== null) {
             $query->where(['Questions.topic_id' => (int)$topicId]);
