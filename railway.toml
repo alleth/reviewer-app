@@ -1,3 +1,7 @@
 [build]
 builder = "dockerfile"
 dockerfilePath = "Dockerfile"
+
+[deploy]
+# Trial/free plan requires services to run in serverless mode (scale to zero when idle)
+sleepApplication = true
