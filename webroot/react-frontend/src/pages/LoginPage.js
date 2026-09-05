@@ -30,7 +30,7 @@ function LoginPage({ mode = 'login', onClose }) {
                 localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));
                 window.location.href = '/';
             } else {
-                setError('Invalid credentials');
+                setError(res.data.message || 'Invalid credentials');
             }
         } catch (err) {
             setError('Login failed');
