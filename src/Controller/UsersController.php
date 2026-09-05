@@ -21,9 +21,12 @@ class UsersController extends AppController
         $username = $data['user_name'] ?? '';
         $password = $data['user_pass'] ?? '';
 
-        $user = $this->Users->find()->where(['user_name' => $username])->first();
+        // The frontend advertises "Username or Email" on this field, so match either.
+        $user = $this->Users->find()
+            ->where(['OR' => ['user_name' => $username, 'email' => $username]])
+            ->first();
 
-        if ($user && password_verify($password, $user->user_pass)) {
+        if ($user && $user->user_pass !== null && password_verify($password, $user->user_pass)) {
             $this->request->getSession()->write('Auth.User', $user);
             $response = ['success' => true, 'user' => $user];
         } else {
