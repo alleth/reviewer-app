@@ -29,6 +29,9 @@ class UsersController extends AppController
         if ($user && $user->user_pass !== null && password_verify($password, $user->user_pass)) {
             $this->request->getSession()->write('Auth.User', $user);
             $response = ['success' => true, 'user' => $user];
+        } elseif ($user && $user->user_pass === null) {
+            // Google-only account: no password was ever set for it.
+            $response = ['success' => false, 'message' => 'This account uses Google Sign-In. Please continue with Google.'];
         } else {
             $response = ['success' => false, 'message' => 'Invalid username or password'];
         }
