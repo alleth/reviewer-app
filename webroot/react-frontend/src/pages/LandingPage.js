@@ -3,6 +3,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { FaFacebookF, FaXTwitter, FaDiscord, FaYoutube } from 'react-icons/fa6';
 import Modal from '../components/ui/Modal';
 import MobileMenu from '../components/ui/MobileMenu';
+import Logo from '../components/ui/Logo';
 import LoginPage from './LoginPage';
 
 const newsColumns = [
@@ -29,8 +30,8 @@ const newsColumns = [
     {
         title: 'FAQ',
         items: [
-            { id: 'faq-pasasure', label: 'What is SkillSprint?' },
-            { id: 'faq-job', label: 'Will SkillSprint help to find a job?' },
+            { id: 'faq-pasasure', label: 'What is CareerPass?' },
+            { id: 'faq-job', label: 'Will CareerPass help to find a job?' },
             { id: 'faq-software', label: 'Do I need any special software?' },
             { id: 'faq-fees', label: 'Are there any fees?' },
         ],
@@ -70,8 +71,11 @@ const LandingPage = () => {
             <div className="relative z-[2] flex-1">
                 {/* Header */}
                 <div className="flex items-center justify-between px-4 py-3 sm:px-8">
-                    <Link to="/" className="ml-4 text-xl font-bold text-brand sm:ml-8">
-                        SkillSprint
+                    <Link to="/" className="ml-4 flex items-center sm:ml-8" style={{ gap: '7px' }}>
+                        <Logo size={33} />
+                        <span style={{ fontSize: 25, fontWeight: 700, letterSpacing: '-0.035em', color: '#00C4A7' }}>
+                            CareerPass
+                        </span>
                     </Link>
                     <div className="hidden gap-2 sm:mr-6 md:flex">
                         <button className="btn-outline" onClick={() => openModal('login')}>Sign In</button>
@@ -133,7 +137,7 @@ const LandingPage = () => {
             {/* Footer */}
             <footer className="relative z-[2] border-t border-gray-200 bg-gray-50 py-6 text-center text-gray-500">
                 <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 sm:flex-row sm:justify-between">
-                    <small>&copy; {new Date().getFullYear()} SkillSprint. All rights reserved.</small>
+                    <small>&copy; {new Date().getFullYear()} CareerPass. All rights reserved.</small>
                     <div className="flex gap-4">
                         <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-brand">
                             <FaFacebookF size={18} />

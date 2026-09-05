@@ -2,7 +2,7 @@
 <html>
 <head>
     <?= $this->Html->charset() ?>
-    <title><?= $this->fetch('title') ?> | SkillSprint</title>
+    <title><?= $this->fetch('title') ?> | CareerPass</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <!-- Include common styles -->

@@ -14,7 +14,7 @@ const TermsOfUse = () => {
         <div className="mx-auto max-w-3xl px-4 py-12">
             <div className="card p-6 sm:p-10">
                 <h1 className="text-center text-2xl font-bold text-gray-900 sm:text-3xl">
-                    SkillsPrint Terms of Use
+                    CareerPass Terms of Use
                 </h1>
                 <p className="mb-6 mt-2 text-center text-sm text-gray-500">
                     <strong>Effective Date:</strong> May 12, 2025
@@ -23,7 +23,7 @@ const TermsOfUse = () => {
                 <section className="mb-6">
                     <h2 className="mb-2 text-lg font-semibold text-gray-900">1. Introduction</h2>
                     <p className="text-gray-600">
-                        Welcome to SkillsPrint ("we," "us," or "our"), a platform dedicated to providing
+                        Welcome to CareerPass ("we," "us," or "our"), a platform dedicated to providing
                         reviews, tutorials, and resources for skill development. These Terms of Use ("Terms")
                         govern your access to and use of our website, services, and content (collectively,
                         the "Platform"). By accessing or using the Platform, you agree to be bound by these
@@ -43,7 +43,7 @@ const TermsOfUse = () => {
                 <section className="mb-6">
                     <h2 className="mb-2 text-lg font-semibold text-gray-900">3. Services</h2>
                     <p className="text-gray-600">
-                        SkillsPrint provides access to skill-building resources, user-generated reviews, and
+                        CareerPass provides access to skill-building resources, user-generated reviews, and
                         tutorials. We reserve the right to modify, suspend, or discontinue any part of the
                         Platform at any time without prior notice.
                     </p>
@@ -67,13 +67,13 @@ const TermsOfUse = () => {
                     <h2 className="mb-2 text-lg font-semibold text-gray-900">5. Intellectual Property</h2>
                     <p className="text-gray-600">
                         All content on the Platform, including text, graphics, logos, and software, is owned
-                        by SkillsPrint or its licensors and is protected by copyright, trademark, and other
+                        by CareerPass or its licensors and is protected by copyright, trademark, and other
                         laws. You may use the content for personal, non-commercial purposes only, unless
                         otherwise permitted by us in writing.
                     </p>
                     <p className="mt-3 text-gray-600">
                         By submitting content (e.g., reviews, comments, or tutorials) to the Platform, you
-                        grant SkillsPrint a worldwide, non-exclusive, royalty-free license to use, reproduce,
+                        grant CareerPass a worldwide, non-exclusive, royalty-free license to use, reproduce,
                         modify, and display such content in connection with the Platform. You represent that
                         you own or have the necessary rights to submit such content.
                     </p>
@@ -102,7 +102,7 @@ const TermsOfUse = () => {
                 <section className="mb-6">
                     <h2 className="mb-2 text-lg font-semibold text-gray-900">8. Limitation of Liability</h2>
                     <p className="text-gray-600">
-                        To the fullest extent permitted by law, SkillsPrint and its affiliates, officers, and
+                        To the fullest extent permitted by law, CareerPass and its affiliates, officers, and
                         employees will not be liable for any indirect, incidental, or consequential damages
                         arising from your use of the Platform, including but not limited to loss of data,
                         profits, or business opportunities. Our total liability for any claim will not exceed
@@ -172,8 +172,8 @@ const TermsOfUse = () => {
                     <h2 className="mb-2 text-lg font-semibold text-gray-900">15. Contact Us</h2>
                     <p className="text-gray-600">If you have questions about these Terms, please contact us at:</p>
                     <p className="mt-2 text-gray-600">
-                        SkillsPrint<br />
-                        Email: <a href="mailto:support@skillsprint.com" className="text-brand hover:text-brand-dark">support@skillsprint.com</a>
+                        CareerPass<br />
+                        Email: <a href="mailto:support@careerpass.com" className="text-brand hover:text-brand-dark">support@careerpass.com</a>
                         <br />
                         Address: [Your Business Address, if applicable]
                     </p>

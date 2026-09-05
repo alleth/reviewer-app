@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 const Sidebar = () => {
     return (
         <div className="fixed left-0 top-0 h-screen w-56 border-r border-gray-200 bg-gray-50 pt-16">
-            <h5 className="mb-4 text-center font-bold text-brand">SkillSprint</h5>
+            <h5 className="mb-4 text-center font-bold text-brand">CareerPass</h5>
             <nav className="flex flex-col px-3">
                 <Link to="/" className="rounded-md px-3 py-2 text-sm text-gray-900 hover:bg-gray-100">
                     Home

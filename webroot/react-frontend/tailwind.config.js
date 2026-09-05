@@ -4,7 +4,7 @@ module.exports = {
     theme: {
         extend: {
             colors: {
-                // SkillSprint brand color — matches Bulma's default palette
+                // CareerPass brand color — matches Bulma's default palette
                 // (primary turquoise #00D1B2), so it reads as a familiar
                 // "Bulma-style" accent even though the framework is Tailwind.
                 brand: {

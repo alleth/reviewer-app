@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FaHome } from 'react-icons/fa';
 import Modal from './ui/Modal';
 import MobileMenu from './ui/MobileMenu';
+import Logo from './ui/Logo';
 import LoginPage from '../pages/LoginPage';
 
 const packages = [
@@ -50,7 +51,12 @@ const Explore = () => {
         <div className="min-h-screen bg-gray-50 pb-16">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 sm:px-8">
-                <Link to="/" className="ml-4 text-xl font-bold text-brand sm:ml-8">SkillSprint</Link>
+                <Link to="/" className="ml-4 flex items-center sm:ml-8" style={{ gap: '7px' }}>
+                    <Logo size={33} />
+                    <span style={{ fontSize: 25, fontWeight: 700, letterSpacing: '-0.035em', color: '#00C4A7' }}>
+                        CareerPass
+                    </span>
+                </Link>
                 <div className="hidden gap-2 sm:mr-6 md:flex">
                     <button className="btn-outline" onClick={() => openModal('login')}>Sign In</button>
                     <button className="btn-primary" onClick={() => openModal('signup')}>Sign Up</button>

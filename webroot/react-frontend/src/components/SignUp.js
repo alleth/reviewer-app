@@ -55,7 +55,7 @@ const SignUp = () => {
                     </button>
 
                     <div className="text-center text-sm text-gray-500">
-                        I accept the SkillSprint's{' '}
+                        I accept the CareerPass's{' '}
                         <a href="/termsofuse" className="text-brand">Terms of Use</a> and{' '}
                         <a href="/signup" className="text-brand">Privacy Notice</a>
                     </div>

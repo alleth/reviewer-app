@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
+import Logo from './ui/Logo';
 
 const onLogout = async () => {
     try {
@@ -28,7 +29,12 @@ const TopNavbar = ({ userName }) => {
     return (
         <nav className="fixed top-0 z-30 w-full border-b border-gray-200 bg-gray-50 px-4 py-2 shadow-sm">
             <div className="mx-auto flex max-w-6xl items-center justify-between">
-                <a href="/" className="mr-8 text-lg font-bold text-brand">SkillSprint</a>
+                <a href="/" className="mr-8 flex items-center" style={{ gap: '7px' }}>
+                    <Logo size={33} />
+                    <span style={{ fontSize: 25, fontWeight: 700, letterSpacing: '-0.035em', color: '#00C4A7' }}>
+                        CareerPass
+                    </span>
+                </a>
 
                 <div className="relative" ref={menuRef}>
                     <button

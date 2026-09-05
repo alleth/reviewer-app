@@ -1,5 +1,6 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 const webpack = require('webpack');
 
 module.exports = (env, argv) => {
@@ -38,7 +39,18 @@ module.exports = (env, argv) => {
         plugins: [
             new HtmlWebpackPlugin({
                 template: './public/index.html',
-                favicon: './public/favicon.ico',
+            }),
+            // public/index.html is handled above as the HTML template; everything else in
+            // public/ (favicons, manifest.json, robots.txt, ...) needs to be copied through
+            // as-is, same as react-scripts' dev server already does implicitly.
+            new CopyWebpackPlugin({
+                patterns: [
+                    {
+                        from: 'public',
+                        to: '.',
+                        globOptions: { ignore: ['**/index.html'] },
+                    },
+                ],
             }),
             new webpack.DefinePlugin({
                 'process.env.REACT_APP_API_URL': JSON.stringify(apiUrl),
