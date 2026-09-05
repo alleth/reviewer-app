@@ -1,6 +1,6 @@
 // src/components/Footer.js
 import React from 'react';
-import { FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
+import { FaFacebook, FaXTwitter, FaDiscord, FaYoutube } from 'react-icons/fa6';
 
 const Footer = () => {
     return (
@@ -9,8 +9,9 @@ const Footer = () => {
                 <span className="text-gray-500">SkillSprint &copy; 2025</span>
                 <div className="flex gap-3 text-gray-600">
                     <FaFacebook />
+                    <FaXTwitter />
+                    <FaDiscord />
                     <FaYoutube />
-                    <FaInstagram />
                 </div>
             </div>
         </footer>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { FaFacebookF, FaInstagram, FaYoutube } from 'react-icons/fa';
+import { FaFacebookF, FaXTwitter, FaDiscord, FaYoutube } from 'react-icons/fa6';
 import Modal from '../components/ui/Modal';
 import MobileMenu from '../components/ui/MobileMenu';
 import LoginPage from './LoginPage';
@@ -138,8 +138,11 @@ const LandingPage = () => {
                         <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-brand">
                             <FaFacebookF size={18} />
                         </a>
-                        <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-brand">
-                            <FaInstagram size={18} />
+                        <a href="https://x.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-brand">
+                            <FaXTwitter size={18} />
+                        </a>
+                        <a href="https://discord.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-brand">
+                            <FaDiscord size={18} />
                         </a>
                         <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-brand">
                             <FaYoutube size={18} />
