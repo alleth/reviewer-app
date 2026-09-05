@@ -1,8 +1,8 @@
 <?php
 
+use App\Database\Driver\Mysql;
 use Cake\Cache\Engine\FileEngine;
 use Cake\Database\Connection;
-use Cake\Database\Driver\Mysql;
 use Cake\Log\Engine\FileLog;
 use Cake\Mailer\Transport\MailTransport;
 use Cake\Core\Configure;
