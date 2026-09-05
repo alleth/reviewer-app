@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { GoogleLogin } from '@react-oauth/google';
+import InitialsAvatar from '../components/ui/InitialsAvatar';
 import API_URL from '../api';
 
 function LoginPage({ mode = 'login', onClose }) {
@@ -13,6 +14,9 @@ function LoginPage({ mode = 'login', onClose }) {
         confirmPassword: ''
     });
     const [error, setError] = useState('');
+    // Set when login() reports the matched account has no password yet (Google-only
+    // account) — swaps the form for a personalized "continue with Google" prompt.
+    const [pendingAccount, setPendingAccount] = useState(null);
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -29,6 +33,9 @@ function LoginPage({ mode = 'login', onClose }) {
             if (res.data.success) {
                 localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));
                 window.location.href = '/';
+            } else if (res.data.needsGoogleSetup) {
+                setPendingAccount(res.data.account);
+                setError('');
             } else {
                 setError(res.data.message || 'Invalid credentials');
             }
@@ -92,6 +99,65 @@ function LoginPage({ mode = 'login', onClose }) {
     const handleGoogleError = () => {
         setError('Google sign-in was cancelled or failed.');
     };
+
+    // Used only from the "this account needs setup" prompt below — always sends the
+    // user to finish setting a password instead of straight to the dashboard.
+    const handleGoogleSetupSuccess = async (credentialResponse) => {
+        try {
+            const res = await axios.post(`${API_URL}/api/google-login`, {
+                credential: credentialResponse.credential,
+            }, { withCredentials: true });
+
+            if (res.data.success) {
+                localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));
+                window.location.href = '/account-setup';
+            } else {
+                setError(res.data.message || 'Google sign-in failed');
+            }
+        } catch (err) {
+            setError('Google sign-in failed. Please try again.');
+        }
+    };
+
+    if (pendingAccount) {
+        return (
+            <div className="p-2 text-center">
+                <InitialsAvatar
+                    fname={pendingAccount.fname}
+                    lname={pendingAccount.lname}
+                    email={pendingAccount.email}
+                    size={56}
+                    className="mx-auto"
+                />
+                <h4 className="mt-4 text-lg font-bold text-gray-900">
+                    {[pendingAccount.fname, pendingAccount.lname].filter(Boolean).join(' ') || pendingAccount.email}
+                </h4>
+                <p className="text-sm text-gray-500">{pendingAccount.email}</p>
+
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    For your security, this account needs a one-time setup. Continue with Google to finish it.
+                </div>
+
+                {error && (
+                    <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                        {error}
+                    </div>
+                )}
+
+                <div className="mt-5 flex justify-center">
+                    <GoogleLogin onSuccess={handleGoogleSetupSuccess} onError={handleGoogleError} width="320" />
+                </div>
+
+                <button
+                    type="button"
+                    className="btn-link mt-4 w-full text-center text-gray-500"
+                    onClick={() => { setPendingAccount(null); setError(''); }}
+                >
+                    Use a different account
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className="p-2">

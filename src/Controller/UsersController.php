@@ -31,8 +31,19 @@ class UsersController extends AppController
                 $this->request->getSession()->write('Auth.User', $user);
                 $response = ['success' => true, 'user' => $user];
             } elseif ($user && $user->user_pass === null) {
-                // Google-only account: no password was ever set for it.
-                $response = ['success' => false, 'message' => 'This account uses Google Sign-In. Please continue with Google.'];
+                // Google-only account: no password was ever set for it. Give the frontend
+                // enough to render a personalized "continue with Google to finish setup"
+                // prompt instead of a plain error.
+                $response = [
+                    'success' => false,
+                    'needsGoogleSetup' => true,
+                    'message' => 'For your security, this account needs a one-time setup. Continue with Google to finish it.',
+                    'account' => [
+                        'email' => $user->email,
+                        'fname' => $user->fname,
+                        'lname' => $user->lname,
+                    ],
+                ];
             } else {
                 $response = ['success' => false, 'message' => 'Invalid username or password'];
             }
@@ -117,6 +128,72 @@ class UsersController extends AppController
                         ->withType('application/json')
                         ->withStringBody(json_encode(['success' => false, 'errors' => $user->getErrors()]));
                 }
+            }
+
+            $this->request->getSession()->write('Auth.User', $user);
+
+            return $this->response
+                ->withType('application/json')
+                ->withStringBody(json_encode(['success' => true, 'user' => $user]));
+        } catch (\Exception $e) {
+            return $this->response
+                ->withStatus(500)
+                ->withType('application/json')
+                ->withStringBody(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+    }
+
+    /**
+     * Lets a logged-in Google-only account (user_pass is null) set a password for the
+     * first time, and touch up the profile fields Google login auto-derived. Refuses to
+     * run once a password already exists — this is first-time setup, not a change-password
+     * flow (which would need the current password).
+     */
+    public function setupAccount(): \Cake\Http\Response
+    {
+        $this->request->allowMethod(['post']);
+
+        $sessionUser = $this->request->getSession()->read('Auth.User');
+        if (!$sessionUser) {
+            return $this->response
+                ->withStatus(401)
+                ->withType('application/json')
+                ->withStringBody(json_encode(['success' => false, 'message' => 'Not logged in']));
+        }
+
+        try {
+            $user = $this->Users->get($sessionUser->user_id);
+
+            if ($user->user_pass !== null) {
+                return $this->response
+                    ->withStatus(409)
+                    ->withType('application/json')
+                    ->withStringBody(json_encode(['success' => false, 'message' => 'This account already has a password set.']));
+            }
+
+            $data = $this->request->getData();
+            $password = $data['user_pass'] ?? '';
+            if ($password === '') {
+                return $this->response
+                    ->withStatus(422)
+                    ->withType('application/json')
+                    ->withStringBody(json_encode(['success' => false, 'message' => 'Password is required.']));
+            }
+
+            $patch = ['user_pass' => password_hash($password, PASSWORD_DEFAULT)];
+            foreach (['fname', 'lname', 'user_name'] as $field) {
+                if (!empty($data[$field])) {
+                    $patch[$field] = $data[$field];
+                }
+            }
+
+            $user = $this->Users->patchEntity($user, $patch);
+
+            if (!$this->Users->save($user)) {
+                return $this->response
+                    ->withStatus(422)
+                    ->withType('application/json')
+                    ->withStringBody(json_encode(['success' => false, 'errors' => $user->getErrors()]));
             }
 
             $this->request->getSession()->write('Auth.User', $user);

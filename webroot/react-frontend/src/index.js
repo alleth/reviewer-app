@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import axios from 'axios';
 import Dashboard from './pages/Dashboard';
+import AccountSetup from './pages/AccountSetup';
 import App from './App'; // <- Guest route handler
 import './index.css';
 import API_URL from './api';
@@ -42,6 +43,8 @@ function AppWrapper() {
     return (
         <Router>
             <Routes>
+                {/* Reachable regardless of isLoggedIn — AccountSetup redirects itself if there's no session. */}
+                <Route path="/account-setup" element={<AccountSetup />} />
                 <Route path="/*" element={isLoggedIn ? <Dashboard /> : <App />} />
             </Routes>
         </Router>
