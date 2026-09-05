@@ -6,9 +6,39 @@ use Cake\Http\Response;
 
 class UsersController extends AppController
 {
+    /**
+     * Lightweight CSRF gate for the state-changing auth actions. This app has no CSRF
+     * middleware (removed entirely so the cross-origin SPA can POST at all) and session
+     * cookies are SameSite=None (required for the same reason) — so without this, any
+     * other website could trigger these actions using a visitor's session cookie via a
+     * plain <form> POST.
+     *
+     * A plain HTML form cannot set custom request headers, only fetch/XHR can — and a
+     * cross-origin fetch/XHR triggers a CORS preflight, which CorsMiddleware only allows
+     * for FRONTEND_URL. So requiring this header turns the CORS policy we already have
+     * into an effective CSRF check, without needing a separate token scheme.
+     *
+     * @return \Cake\Http\Response|null A 403 response if the header is missing, null to continue.
+     */
+    private function requireAjaxHeader(): ?\Cake\Http\Response
+    {
+        if ($this->request->getHeaderLine('X-Requested-With') !== 'XMLHttpRequest') {
+            return $this->response
+                ->withStatus(403)
+                ->withType('application/json')
+                ->withStringBody(json_encode(['success' => false, 'message' => 'Missing required request header']));
+        }
+
+        return null;
+    }
+
     public function login()
     {
         $this->request->allowMethod(['post']);
+
+        if ($blocked = $this->requireAjaxHeader()) {
+            return $blocked;
+        }
 
         // Allow CORS for development
         $this->response = $this->response
@@ -62,6 +92,10 @@ class UsersController extends AppController
     public function googleLogin(): \Cake\Http\Response
     {
         $this->request->allowMethod(['post']);
+
+        if ($blocked = $this->requireAjaxHeader()) {
+            return $blocked;
+        }
 
         try {
             $credential = $this->request->getData('credential');
@@ -157,6 +191,10 @@ class UsersController extends AppController
     {
         $this->request->allowMethod(['post']);
 
+        if ($blocked = $this->requireAjaxHeader()) {
+            return $blocked;
+        }
+
         $sessionUser = $this->request->getSession()->read('Auth.User');
         if (!$sessionUser) {
             return $this->response
@@ -215,6 +253,12 @@ class UsersController extends AppController
 
     public function logout(): \Cake\Http\Response
     {
+        $this->request->allowMethod(['post']);
+
+        if ($blocked = $this->requireAjaxHeader()) {
+            return $blocked;
+        }
+
         $session = $this->request->getSession();
         $session->delete('Auth.User');
         $session->renew();
@@ -242,6 +286,10 @@ class UsersController extends AppController
     public function register()
     {
         $this->request->allowMethod(['post']);
+
+        if ($blocked = $this->requireAjaxHeader()) {
+            return $blocked;
+        }
 
         try {
             $data = $this->request->getData();

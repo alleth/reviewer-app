@@ -1,15 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import API_URL from '../api';
+import { api } from '../api';
 
 const onLogout = async () => {
     try {
-        await fetch(`${API_URL}/api/logout`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
+        await api.post('/api/logout');
         localStorage.removeItem('skillsprint_user');
         window.location.href = '/';
     } catch (error) {

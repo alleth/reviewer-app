@@ -1,15 +1,11 @@
 import React from 'react';
-import API_URL from '../api';
+import { api } from '../api';
 
 function Dashboard() {
     const handleLogout = async (e) => {
         e.preventDefault();
         try {
-            await fetch(`${API_URL}/api/logout`, {
-                method: 'POST',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' }
-            });
+            await api.post('/api/logout');
         } catch (err) {
             console.error('Logout request failed:', err);
         }

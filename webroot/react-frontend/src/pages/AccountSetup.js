@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import InitialsAvatar from '../components/ui/InitialsAvatar';
-import API_URL from '../api';
+import { api } from '../api';
 
 export default function AccountSetup() {
     const [form, setForm] = useState({ fname: '', lname: '', username: '', password: '', confirmPassword: '' });
@@ -44,12 +43,12 @@ export default function AccountSetup() {
         }
 
         try {
-            const res = await axios.post(`${API_URL}/api/account/setup`, {
+            const res = await api.post('/api/account/setup', {
                 user_pass: form.password,
                 fname: form.fname,
                 lname: form.lname,
                 user_name: form.username,
-            }, { withCredentials: true });
+            });
 
             if (res.data.success) {
                 localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));

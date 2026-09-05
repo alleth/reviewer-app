@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
 import Modal from './ui/Modal';
-import API_URL from '../api';
+import { api } from '../api';
 
 const SignInModal = () => {
     const [showLogin, setShowLogin] = useState(false);
@@ -22,14 +22,8 @@ const SignInModal = () => {
         e.preventDefault();
 
         try {
-            const res = await fetch(`${API_URL}/api/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ user_name: username, user_pass: password })
-            });
-
-            const data = await res.json();
+            const res = await api.post('/api/login', { user_name: username, user_pass: password });
+            const data = res.data;
 
             if (data.success) {
                 localStorage.setItem('isLoggedIn', 'true');
@@ -46,14 +40,8 @@ const SignInModal = () => {
 
     const handleGoogleSuccess = async (credentialResponse) => {
         try {
-            const res = await fetch(`${API_URL}/api/google-login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ credential: credentialResponse.credential })
-            });
-
-            const data = await res.json();
+            const res = await api.post('/api/google-login', { credential: credentialResponse.credential });
+            const data = res.data;
 
             if (data.success) {
                 localStorage.setItem('skillsprint_user', JSON.stringify(data.user));

@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import axios from 'axios';
 import { GoogleLogin } from '@react-oauth/google';
 import InitialsAvatar from '../components/ui/InitialsAvatar';
-import API_URL from '../api';
+import { api } from '../api';
 
 function LoginPage({ mode = 'login', onClose }) {
     const [formData, setFormData] = useState({
@@ -25,10 +24,10 @@ function LoginPage({ mode = 'login', onClose }) {
     const handleLogin = async (e) => {
         e.preventDefault();
         try {
-            const res = await axios.post(`${API_URL}/api/login`, {
+            const res = await api.post('/api/login', {
                 user_name: formData.username,
                 user_pass: formData.password
-            }, { withCredentials: true });
+            });
 
             if (res.data.success) {
                 localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));
@@ -53,7 +52,7 @@ function LoginPage({ mode = 'login', onClose }) {
         }
 
         try {
-            const res = await axios.post(`${API_URL}/api/register`, {
+            const res = await api.post('/api/register', {
                 fname: formData.fname,
                 lname: formData.lname,
                 email: formData.email,
@@ -81,9 +80,9 @@ function LoginPage({ mode = 'login', onClose }) {
 
     const handleGoogleSuccess = async (credentialResponse) => {
         try {
-            const res = await axios.post(`${API_URL}/api/google-login`, {
+            const res = await api.post('/api/google-login', {
                 credential: credentialResponse.credential,
-            }, { withCredentials: true });
+            });
 
             if (res.data.success) {
                 localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));
@@ -106,9 +105,9 @@ function LoginPage({ mode = 'login', onClose }) {
     // user to finish setting a password instead of straight to the dashboard.
     const handleGoogleSetupSuccess = async (credentialResponse) => {
         try {
-            const res = await axios.post(`${API_URL}/api/google-login`, {
+            const res = await api.post('/api/google-login', {
                 credential: credentialResponse.credential,
-            }, { withCredentials: true });
+            });
 
             if (res.data.success) {
                 localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));
