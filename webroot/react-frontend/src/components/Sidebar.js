@@ -1,26 +1,16 @@
 import React from 'react';
-import { Nav } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 
 const Sidebar = () => {
     return (
-        <div style={{
-            width: '220px',
-            height: '100vh',
-            backgroundColor: '#F9FAFB',
-            borderRight: '1px solid #e0e0e0',
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            paddingTop: '4rem'
-        }}>
-            <h5 className="text-center mb-4" style={{ color: '#14B8A6', fontWeight: 'bold' }}>SkillSprint</h5>
-            <Nav className="flex-column px-3">
-                <Nav.Link as={Link} to="/" style={{ color: '#111827' }}>
+        <div className="fixed left-0 top-0 h-screen w-56 border-r border-gray-200 bg-gray-50 pt-16">
+            <h5 className="mb-4 text-center font-bold text-brand">SkillSprint</h5>
+            <nav className="flex flex-col px-3">
+                <Link to="/" className="rounded-md px-3 py-2 text-sm text-gray-900 hover:bg-gray-100">
                     Home
-                </Nav.Link>
+                </Link>
                 {/* Add more menu items here if needed */}
-            </Nav>
+            </nav>
         </div>
     );
 };

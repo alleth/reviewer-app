@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Modal, Button, Form } from 'react-bootstrap';
 import { GoogleLogin } from '@react-oauth/google';
+import Modal from './ui/Modal';
 import API_URL from '../api';
 
 const SignInModal = () => {
@@ -76,107 +76,75 @@ const SignInModal = () => {
 
     return (
         <>
-            <Button
-                variant="outline-dark"
-                className="me-2"
-                onClick={handleLoginShow}
-            >
+            <button type="button" className="btn-outline" onClick={handleLoginShow}>
                 Sign In
-            </Button>
+            </button>
 
             {/* Sign In Modal */}
-            <Modal show={showLogin} onHide={handleLoginClose} centered>
-                <Modal.Header closeButton style={{ backgroundColor: '#F9FAFB' }}>
-                    <Modal.Title style={{ color: '#111827' }}>Sign In</Modal.Title>
-                </Modal.Header>
-                <Modal.Body style={{ backgroundColor: '#F9FAFB' }}>
-                    <Form onSubmit={handleSubmit}>
-                        <Form.Group controlId="formUsername" className="mb-3">
-                            <Form.Label style={{ color: '#6B7280' }}>Username</Form.Label>
-                            <Form.Control
-                                type="text"
-                                placeholder="Enter your username"
-                                required
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                style={{ backgroundColor: '#fff', borderColor: '#14B8A6' }}
-                            />
-                        </Form.Group>
+            <Modal show={showLogin} onClose={handleLoginClose}>
+                <h4 className="mb-4 text-lg font-bold text-gray-900">Sign In</h4>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="form-label">Username</label>
+                        <input
+                            type="text"
+                            placeholder="Enter your username"
+                            required
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            className="form-input"
+                        />
+                    </div>
 
-                        <Form.Group controlId="formPassword" className="mb-4">
-                            <Form.Label style={{ color: '#6B7280' }}>Password</Form.Label>
-                            <Form.Control
-                                type="password"
-                                placeholder="Enter your password"
-                                required
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                style={{ backgroundColor: '#fff', borderColor: '#14B8A6' }}
-                            />
-                        </Form.Group>
+                    <div>
+                        <label className="form-label">Password</label>
+                        <input
+                            type="password"
+                            placeholder="Enter your password"
+                            required
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="form-input"
+                        />
+                    </div>
 
-                        <div className="d-flex justify-content-between align-items-center mb-4">
-                            <button
-                                type="button"
-                                onClick={handleForgotShow}
-                                className="btn btn-link p-0"
-                                style={{ textDecoration: 'underline', color: '#14B8A6' }}
-                            >
-                                Forgot password?
-                            </button>
-                            <span style={{ color: '#6B7280', fontSize: '0.9rem' }}>
-                                No account? <a href="#signup" style={{ color: '#14B8A6' }}>Sign up</a>
-                            </span>
-                        </div>
+                    <div className="flex items-center justify-between">
+                        <button type="button" onClick={handleForgotShow} className="btn-link underline">
+                            Forgot password?
+                        </button>
+                        <span className="text-sm text-gray-500">
+                            No account? <a href="#signup" className="text-brand">Sign up</a>
+                        </span>
+                    </div>
 
-                        <Button
-                            type="submit"
-                            className="w-100 mb-3"
-                            style={{ backgroundColor: '#14B8A6', borderColor: '#14B8A6' }}
-                        >
-                            Log In
-                        </Button>
+                    <button type="submit" className="btn-primary w-full">Log In</button>
 
-                        <div className="text-center text-muted mb-3">or</div>
+                    <div className="flex items-center gap-3 text-center text-sm text-gray-400">
+                        <div className="h-px flex-1 bg-gray-200" />
+                        or
+                        <div className="h-px flex-1 bg-gray-200" />
+                    </div>
 
-                        <div className="d-flex justify-content-center">
-                            <GoogleLogin
-                                onSuccess={handleGoogleSuccess}
-                                onError={() => alert('Google sign-in was cancelled.')}
-                                width="320"
-                            />
-                        </div>
-                    </Form>
-                </Modal.Body>
+                    <div className="flex justify-center">
+                        <GoogleLogin
+                            onSuccess={handleGoogleSuccess}
+                            onError={() => alert('Google sign-in was cancelled.')}
+                            width="320"
+                        />
+                    </div>
+                </form>
             </Modal>
 
             {/* Forgot Password Modal */}
-            <Modal show={showForgotPassword} onHide={handleForgotClose} centered>
-                <Modal.Header closeButton style={{ backgroundColor: '#F9FAFB' }}>
-                    <Modal.Title style={{ color: '#111827' }}>Reset Password</Modal.Title>
-                </Modal.Header>
-                <Modal.Body style={{ backgroundColor: '#F9FAFB' }}>
-                    <Form onSubmit={handleForgotSubmit}>
-                        <Form.Group controlId="formResetEmail" className="mb-4">
-                            <Form.Label style={{ color: '#6B7280' }}>
-                                We'll send reset instructions to:
-                            </Form.Label>
-                            <Form.Control
-                                type="email"
-                                placeholder="you@example.com"
-                                required
-                                style={{ backgroundColor: '#fff', borderColor: '#14B8A6' }}
-                            />
-                        </Form.Group>
-                        <Button
-                            type="submit"
-                            className="w-100"
-                            style={{ backgroundColor: '#14B8A6', borderColor: '#14B8A6' }}
-                        >
-                            Send Reset Link
-                        </Button>
-                    </Form>
-                </Modal.Body>
+            <Modal show={showForgotPassword} onClose={handleForgotClose}>
+                <h4 className="mb-4 text-lg font-bold text-gray-900">Reset Password</h4>
+                <form onSubmit={handleForgotSubmit} className="space-y-4">
+                    <div>
+                        <label className="form-label">We'll send reset instructions to:</label>
+                        <input type="email" placeholder="you@example.com" required className="form-input" />
+                    </div>
+                    <button type="submit" className="btn-primary w-full">Send Reset Link</button>
+                </form>
             </Modal>
         </>
     );

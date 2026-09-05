@@ -1,5 +1,4 @@
 import React from 'react';
-import { Container, Row, Col, Form, Button } from 'react-bootstrap';
 import { FaGoogle } from 'react-icons/fa';
 
 const SignUp = () => {
@@ -13,96 +12,55 @@ const SignUp = () => {
     };
 
     return (
-        <div style={{ backgroundColor: '#F9FAFB', minHeight: '100vh', paddingTop: '80px' }}>
-            <Container>
-                <Row className="justify-content-center">
-                    <Col md={6}>
-                        <Form onSubmit={handleSubmit} className="shadow-sm p-4 bg-white rounded-4">
-                            <h4 className="text-center mb-4" style={{ color: '#111827' }}>
-                                Create Your Account
-                            </h4>
+        <div className="min-h-screen bg-gray-50 pt-20">
+            <div className="mx-auto max-w-md px-4">
+                <form onSubmit={handleSubmit} className="card space-y-4 p-6">
+                    <h4 className="text-center text-lg font-bold text-gray-900">Create Your Account</h4>
 
-                            <Form.Group controlId="formName" className="mb-3">
-                                <Form.Label style={{ color: '#6B7280' }}>Full Name</Form.Label>
-                                <Form.Control
-                                    type="text"
-                                    placeholder="Juan Dela Cruz"
-                                    required
-                                    style={{ backgroundColor: '#fff', borderColor: '#14B8A6', color: '#111827' }}
-                                />
-                            </Form.Group>
+                    <div>
+                        <label className="form-label">Full Name</label>
+                        <input type="text" placeholder="Juan Dela Cruz" required className="form-input" />
+                    </div>
 
-                            <Form.Group controlId="formEmail" className="mb-3">
-                                <Form.Label style={{ color: '#6B7280' }}>Email</Form.Label>
-                                <Form.Control
-                                    type="email"
-                                    placeholder="you@example.com"
-                                    required
-                                    style={{ backgroundColor: '#fff', borderColor: '#14B8A6', color: '#111827' }}
-                                />
-                            </Form.Group>
+                    <div>
+                        <label className="form-label">Email</label>
+                        <input type="email" placeholder="you@example.com" required className="form-input" />
+                    </div>
 
-                            <Form.Group controlId="formUsername" className="mb-3">
-                                <Form.Label style={{ color: '#6B7280' }}>Username</Form.Label>
-                                <Form.Control
-                                    type="text"
-                                    placeholder="Choose a username"
-                                    required
-                                    style={{ backgroundColor: '#fff', borderColor: '#14B8A6', color: '#111827' }}
-                                />
-                            </Form.Group>
+                    <div>
+                        <label className="form-label">Username</label>
+                        <input type="text" placeholder="Choose a username" required className="form-input" />
+                    </div>
 
-                            <Form.Group controlId="formPassword" className="mb-4">
-                                <Form.Label style={{ color: '#6B7280' }}>Password</Form.Label>
-                                <Form.Control
-                                    type="password"
-                                    placeholder="Enter password"
-                                    required
-                                    style={{ backgroundColor: '#fff', borderColor: '#14B8A6', color: '#111827' }}
-                                />
-                            </Form.Group>
+                    <div>
+                        <label className="form-label">Password</label>
+                        <input type="password" placeholder="Enter password" required className="form-input" />
+                    </div>
 
-                            <Button
-                                type="submit"
-                                className="w-100 mb-3"
-                                style={{ backgroundColor: '#14B8A6', borderColor: '#14B8A6', color: '#fff' }}
-                            >
-                                Sign Up
-                            </Button>
+                    <button type="submit" className="btn-primary w-full">Sign Up</button>
 
-                            <div className="text-center text-muted mb-3">or</div>
+                    <div className="flex items-center gap-3 text-center text-sm text-gray-400">
+                        <div className="h-px flex-1 bg-gray-200" />
+                        or
+                        <div className="h-px flex-1 bg-gray-200" />
+                    </div>
 
-                            <Button
-                                className="w-100"
-                                onClick={handleGoogleSignUp}
-                                style={{
-                                    borderColor: '#6B7280',
-                                    color: '#6B7280',
-                                    backgroundColor: '#F9FAFB',
-                                    transition: 'all 0.2s ease-in-out',
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.target.style.backgroundColor = '#6B7280';
-                                    e.target.style.color = '#F9FAFB';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.target.style.backgroundColor = '#F9FAFB';
-                                    e.target.style.color = '#6B7280';
-                                }}
-                            >
-                                <FaGoogle className="me-2" />
-                                Continue with Google
-                            </Button>
+                    <button
+                        type="button"
+                        onClick={handleGoogleSignUp}
+                        className="btn-outline w-full border-gray-400 text-gray-500 transition-colors hover:bg-gray-500 hover:text-gray-50"
+                    >
+                        <FaGoogle className="mr-2" />
+                        Continue with Google
+                    </button>
 
-                            <div className="text-center mt-4" style={{color: '#6B7280'}}>
-                                I accept the SkillSprint's <a href="/termsofuse" style={{color: '#14B8A6'}}>Terms of
-                                Use</a> and <a href="/signup" style={{color: '#14B8A6'}}>Privacy Notice</a>
-
-                            </div>
-                        </Form>
-                    </Col>
-                </Row>
-            </Container>
+                    <div className="text-center text-sm text-gray-500">
+                        I accept the SkillSprint's{' '}
+                        <a href="/termsofuse" className="text-brand">Terms of Use</a> and{' '}
+                        <a href="/signup" className="text-brand">Privacy Notice</a>
+                    </div>
+                </form>
+            </div>
         </div>
     );
 };

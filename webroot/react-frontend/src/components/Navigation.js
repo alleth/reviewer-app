@@ -1,29 +1,21 @@
 // src/components/Navigation.js
 import React from 'react';
-import {Navbar, Nav, Container, Button} from 'react-bootstrap';
-import SignInModal from "./SignInModal";
 import { Link } from 'react-router-dom';
+import SignInModal from './SignInModal';
+
 const Navigation = () => {
     return (
-        <Navbar bg="light" expand="lg" className="shadow-sm py-3">
-            <Container>
-                <Navbar.Brand as={Link} to="/" style={{ color: '#14B8A6', fontWeight: 'bold' }}>SkillSprint</Navbar.Brand>
-                <Navbar.Toggle aria-controls="basic-navbar-nav" />
-                <Navbar.Collapse id="basic-navbar-nav" className="justify-content-end">
-                    <Nav>
-                        <SignInModal className="me-2">Sign In</SignInModal>
-                        <Button
-                            as={Link}
-                            to="/signup"
-                            className="ms-2"
-                            style={{backgroundColor: '#14B8A6', borderColor: '#14B8A6', color: '#ffffff' }}
-                        >
-                            Sign Up
-                        </Button>
-                    </Nav>
-                </Navbar.Collapse>
-            </Container>
-        </Navbar>
+        <nav className="border-b border-gray-200 bg-gray-50 py-3 shadow-sm">
+            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4">
+                <Link to="/" className="text-lg font-bold text-brand">SkillSprint</Link>
+                <div className="flex items-center gap-2">
+                    <SignInModal />
+                    <Link to="/signup">
+                        <button className="btn-primary">Sign Up</button>
+                    </Link>
+                </div>
+            </div>
+        </nav>
     );
 };
 

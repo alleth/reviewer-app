@@ -1,9 +1,41 @@
 import React, { useEffect, useState } from 'react';
-import { Container, Button, Row, Col, ListGroup, Modal, Offcanvas } from 'react-bootstrap';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { FaFacebookF, FaInstagram, FaYoutube } from 'react-icons/fa';
+import Modal from '../components/ui/Modal';
+import MobileMenu from '../components/ui/MobileMenu';
 import LoginPage from './LoginPage';
-import { Link } from 'react-router-dom';
+
+const newsColumns = [
+    {
+        title: 'News & Trending',
+        items: [
+            { id: 'news-passers', label: 'List of Passers for CSC March 2025' },
+            { id: 'news-subjects', label: 'Upcoming new subjects' },
+        ],
+    },
+    {
+        title: 'Popular Subjects',
+        items: [
+            { id: 'subject-csc-pro', label: 'CSC - Professional' },
+            { id: 'subject-csc-subpro', label: 'CSC - Sub-Professional' },
+        ],
+    },
+    {
+        title: 'Popular Articles',
+        items: [
+            { id: 'article-cse2025', label: 'Examination Announcement No. 04s 2025 - CSE PPT Exam Calendar CY 2025' },
+        ],
+    },
+    {
+        title: 'FAQ',
+        items: [
+            { id: 'faq-pasasure', label: 'What is SkillSprint?' },
+            { id: 'faq-job', label: 'Will SkillSprint help to find a job?' },
+            { id: 'faq-software', label: 'Do I need any special software?' },
+            { id: 'faq-fees', label: 'Are there any fees?' },
+        ],
+    },
+];
 
 const LandingPage = () => {
     const location = useLocation();
@@ -21,183 +53,100 @@ const LandingPage = () => {
         setShowModal(true);
     };
 
-    const closeModal = () => {
-        setShowModal(false);
-    };
+    const closeModal = () => setShowModal(false);
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', position: 'relative', overflow: 'hidden' }}>
+        <div className="relative flex min-h-screen flex-col overflow-hidden">
             {/* Background Circles */}
-            <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }}>
-                <div className="circle circle1"></div>
-                <div className="circle circle2"></div>
+            <div className="pointer-events-none absolute inset-0 z-0">
+                <div className="absolute left-[10%] top-[10%] h-[300px] w-[300px] animate-drift1 rounded-full bg-brand opacity-40 blur-3xl" />
+                <div className="absolute left-[70%] top-[60%] h-[300px] w-[300px] animate-drift2 rounded-full bg-brand opacity-40 blur-3xl" />
             </div>
 
             {/* Glass Overlay */}
-            <div
-                style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    background: 'rgba(249, 250, 251, 0.7)',
-                    backdropFilter: 'blur(20px)',
-                    WebkitBackdropFilter: 'blur(20px)',
-                    zIndex: 2,
-                }}
-            ></div>
+            <div className="absolute inset-0 z-[1] bg-gray-50/70 backdrop-blur-2xl" />
 
             {/* Page Content */}
-            <div style={{ position: 'relative', zIndex: 3, flex: 1 }}>
+            <div className="relative z-[2] flex-1">
                 {/* Header */}
-                <div className="d-flex justify-content-between align-items-center px-4 py-3">
-                    <Link to="/" style={{ textDecoration: 'none' }}>
-                        <div className="fw-bold fs-4" style={{ color: '#14B8A6', marginLeft: '3rem', cursor: 'pointer' }}>
-                            SkillSprint
-                        </div>
+                <div className="flex items-center justify-between px-4 py-3 sm:px-8">
+                    <Link to="/" className="ml-4 text-xl font-bold text-brand sm:ml-8">
+                        SkillSprint
                     </Link>
-                    <div className="d-none d-md-block" style={{ marginRight: '2.5rem' }}>
-                        <Button variant="outline-dark" className="me-2" onClick={() => openModal('login')}>Sign In</Button>
-                        <Button style={{ backgroundColor: '#14B8A6', border: 'none' }} onClick={() => openModal('signup')}>Sign Up</Button>
+                    <div className="hidden gap-2 sm:mr-6 md:flex">
+                        <button className="btn-outline" onClick={() => openModal('login')}>Sign In</button>
+                        <button className="btn-primary" onClick={() => openModal('signup')}>Sign Up</button>
                     </div>
-                    <div className="d-md-none">
-                        <Button variant="outline-dark" onClick={() => setShowMenu(true)}>☰</Button>
+                    <div className="md:hidden">
+                        <button className="btn-outline" onClick={() => setShowMenu(true)} aria-label="Open menu">☰</button>
                     </div>
                 </div>
 
-                {/* Offcanvas Menu */}
-                <Offcanvas show={showMenu} onHide={() => setShowMenu(false)} placement="end">
-                    <Offcanvas.Header closeButton>
-                        <Offcanvas.Title>Menu</Offcanvas.Title>
-                    </Offcanvas.Header>
-                    <Offcanvas.Body>
-                        <Button variant="outline-dark" className="w-100 mb-2" onClick={() => { openModal('login'); setShowMenu(false); }}>Sign In</Button>
-                        <Button style={{ backgroundColor: '#14B8A6', border: 'none' }} className="w-100" onClick={() => { openModal('signup'); setShowMenu(false); }}>Sign Up</Button>
-                    </Offcanvas.Body>
-                </Offcanvas>
+                <MobileMenu show={showMenu} onClose={() => setShowMenu(false)}>
+                    <div className="flex flex-col gap-2">
+                        <button className="btn-outline w-full" onClick={() => { openModal('login'); setShowMenu(false); }}>Sign In</button>
+                        <button className="btn-primary w-full" onClick={() => { openModal('signup'); setShowMenu(false); }}>Sign Up</button>
+                    </div>
+                </MobileMenu>
 
                 {/* Hero Section */}
-                <Container className="text-center py-5">
-                    <h1 className="display-4 fw-bold">Pass the Civil Service<br /> Exam with confidence.</h1>
-                    <p style={{ color: '#6B7280' }}>Unleash Your Potential with Our Tools, Anytime, Anywhere</p>
-                    <div className="d-flex justify-content-center mt-4">
-                        <Button style={{ backgroundColor: '#14B8A6', border: 'none' }} className="me-3">Test Yourself</Button>
-                        <Button variant="outline-dark" onClick={() => navigate('/explore')}>Explore</Button>
+                <div className="mx-auto max-w-3xl px-4 py-16 text-center">
+                    <h1 className="text-4xl font-bold leading-tight text-gray-900 sm:text-5xl">
+                        Pass the Civil Service<br /> Exam with confidence.
+                    </h1>
+                    <p className="mt-4 text-gray-500">Unleash Your Potential with Our Tools, Anytime, Anywhere</p>
+                    <div className="mt-6 flex justify-center gap-3">
+                        <button className="btn-primary px-6">Test Yourself</button>
+                        <button className="btn-outline px-6" onClick={() => navigate('/explore')}>Explore</button>
                     </div>
-                </Container>
+                </div>
 
                 {/* Info Section */}
-                <Container className="py-5">
-                    <Row className="text-center g-4">
-                        <Col>
-                            <h5>News & Trending</h5>
-                            <ListGroup variant="flush">
-                                <ListGroup.Item action href="#news-passers" className="text-start">List of Passers for CSC March 2025</ListGroup.Item>
-                                <ListGroup.Item action href="#news-subjects" className="text-start">Upcoming new subjects</ListGroup.Item>
-                            </ListGroup>
-                        </Col>
-                        <Col>
-                            <h5>Popular Subjects</h5>
-                            <ListGroup variant="flush">
-                                <ListGroup.Item action href="#subject-csc-pro" className="text-start">CSC - Professional</ListGroup.Item>
-                                <ListGroup.Item action href="#subject-csc-subpro" className="text-start">CSC - Sub-Professional</ListGroup.Item>
-                            </ListGroup>
-                        </Col>
-                        <Col>
-                            <h5>Popular Articles</h5>
-                            <ListGroup variant="flush">
-                                <ListGroup.Item action href="#article-cse2025" className="text-start">
-                                    Examination Announcement No. 04s 2025 - CSE PPT Exam Calendar CY 2025
-                                </ListGroup.Item>
-                            </ListGroup>
-                        </Col>
-                        <Col>
-                            <h5>FAQ</h5>
-                            <ListGroup variant="flush">
-                                <ListGroup.Item action href="#faq-pasasure" className="text-start">What is SkillSprint?</ListGroup.Item>
-                                <ListGroup.Item action href="#faq-job" className="text-start">Will SkillSprint help to find a job?</ListGroup.Item>
-                                <ListGroup.Item action href="#faq-software" className="text-start">Do I need any special software?</ListGroup.Item>
-                                <ListGroup.Item action href="#faq-fees" className="text-start">Are there any fees?</ListGroup.Item>
-                            </ListGroup>
-                        </Col>
-                    </Row>
-                </Container>
+                <div className="mx-auto max-w-6xl px-4 py-12">
+                    <div className="grid grid-cols-1 gap-8 text-center sm:grid-cols-2 lg:grid-cols-4">
+                        {newsColumns.map((col) => (
+                            <div key={col.title}>
+                                <h5 className="mb-2 font-semibold text-gray-900">{col.title}</h5>
+                                <ul className="divide-y divide-gray-200 text-left">
+                                    {col.items.map((item) => (
+                                        <li key={item.id}>
+                                            <a
+                                                href={`#${item.id}`}
+                                                className="block py-2 text-sm text-gray-600 hover:text-brand"
+                                            >
+                                                {item.label}
+                                            </a>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
 
-            {/* Modal */}
-            <Modal show={showModal} onHide={closeModal} centered>
-                <Modal.Body>
-                    <LoginPage mode={authMode} onClose={closeModal} />
-                </Modal.Body>
+            {/* Auth Modal */}
+            <Modal show={showModal} onClose={closeModal}>
+                <LoginPage mode={authMode} onClose={closeModal} />
             </Modal>
 
             {/* Footer */}
-            <footer style={{ backgroundColor: '#F9FAFB', borderTop: '1px solid #E5E7EB', padding: '1.5rem 0', textAlign: 'center', color: '#6B7280' }}>
-                <Container>
-                    <Row className="align-items-center">
-                        <Col md={6} className="mb-2 mb-md-0">
-                            <small>&copy; {new Date().getFullYear()} SkillSprint. All rights reserved.</small>
-                        </Col>
-                        <Col md={6}>
-                            <div className="d-flex justify-content-center justify-content-md-end gap-3">
-                                <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" style={{ color: '#6B7280' }}>
-                                    <FaFacebookF size={18} />
-                                </a>
-                                <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" style={{ color: '#6B7280' }}>
-                                    <FaInstagram size={18} />
-                                </a>
-                                <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" style={{ color: '#6B7280' }}>
-                                    <FaYoutube size={18} />
-                                </a>
-                            </div>
-                        </Col>
-                    </Row>
-                </Container>
+            <footer className="relative z-[2] border-t border-gray-200 bg-gray-50 py-6 text-center text-gray-500">
+                <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 sm:flex-row sm:justify-between">
+                    <small>&copy; {new Date().getFullYear()} SkillSprint. All rights reserved.</small>
+                    <div className="flex gap-4">
+                        <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-brand">
+                            <FaFacebookF size={18} />
+                        </a>
+                        <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-brand">
+                            <FaInstagram size={18} />
+                        </a>
+                        <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-brand">
+                            <FaYoutube size={18} />
+                        </a>
+                    </div>
+                </div>
             </footer>
-
-            {/* Background Animations */}
-            <style>
-                {`
-                    .circle {
-                        position: absolute;
-                        width: 300px;
-                        height: 300px;
-                        border-radius: 50%;
-                        background-color: #14B8A6;
-                        opacity: 0.4;
-                        filter: blur(30px);
-                    }
-
-                    .circle1 {
-                        top: 10%;
-                        left: 10%;
-                        animation: moveCircle1 20s ease-in-out infinite alternate;
-                    }
-
-                    .circle2 {
-                        top: 60%;
-                        left: 70%;
-                        animation: moveCircle2 25s ease-in-out infinite alternate;
-                    }
-
-                    @keyframes moveCircle1 {
-                        0%   { transform: translate(0, 0); }
-                        25%  { transform: translate(100px, 150px); }
-                        50%  { transform: translate(200px, -100px); }
-                        75%  { transform: translate(-50px, 50px); }
-                        100% { transform: translate(0, 0); }
-                    }
-
-                    @keyframes moveCircle2 {
-                        0%   { transform: translate(0, 0); }
-                        25%  { transform: translate(-100px, -150px); }
-                        50%  { transform: translate(-200px, 100px); }
-                        75%  { transform: translate(50px, -50px); }
-                        100% { transform: translate(0, 0); }
-                    }
-                `}
-            </style>
         </div>
     );
 };

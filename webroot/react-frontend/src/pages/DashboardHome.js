@@ -1,11 +1,10 @@
 import React from 'react';
-import 'bootstrap/dist/css/bootstrap.min.css';
 
 export default function DashboardHome() {
     return (
-        <div>
-            <h1>Dashboard</h1>
-            <p>You are logged in.</p>
+        <div className="mx-auto max-w-6xl px-4 py-8">
+            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+            <p className="mt-2 text-gray-500">You are logged in.</p>
         </div>
     );
 }

@@ -5,7 +5,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import axios from 'axios';
 import Dashboard from './pages/Dashboard';
 import App from './App'; // <- Guest route handler
-import 'bootstrap/dist/css/bootstrap.min.css';
+import './index.css';
 import API_URL from './api';
 
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
@@ -31,7 +31,13 @@ function AppWrapper() {
             .catch(() => setIsLoggedIn(false));
     }, []);
 
-    if (isLoggedIn === null) return <div>Loading...</div>;
+    if (isLoggedIn === null) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-gray-50 text-sm text-gray-500">
+                Loading...
+            </div>
+        );
+    }
 
     return (
         <Router>

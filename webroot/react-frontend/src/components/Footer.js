@@ -1,19 +1,18 @@
 // src/components/Footer.js
 import React from 'react';
-import {Container} from "react-bootstrap";
-import {FaFacebook, FaInstagram, FaYoutube} from "react-icons/fa";
+import { FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
 
 const Footer = () => {
     return (
-        <footer className="bg-light py-4 mt-auto">
-            <Container className="d-flex justify-content-between align-items-center">
-                <span style={{color: '#6B7280'}}>SkillSprint &copy; 2025</span>
-                <div>
-                    <FaFacebook className="me-3"/>
-                    <FaYoutube className="me-3"/>
-                    <FaInstagram/>
+        <footer className="mt-auto bg-gray-100 py-4">
+            <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
+                <span className="text-gray-500">SkillSprint &copy; 2025</span>
+                <div className="flex gap-3 text-gray-600">
+                    <FaFacebook />
+                    <FaYoutube />
+                    <FaInstagram />
                 </div>
-            </Container>
+            </div>
         </footer>
     );
 };

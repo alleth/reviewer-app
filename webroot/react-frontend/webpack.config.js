@@ -22,7 +22,7 @@ module.exports = (env, argv) => {
             rules: [
                 {
                     test: /\.css$/i,
-                    use: ['style-loader', 'css-loader'],
+                    use: ['style-loader', 'css-loader', 'postcss-loader'],
                 },
                 {
                     test: /\.jsx?$/,

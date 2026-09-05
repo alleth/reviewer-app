@@ -1,9 +1,38 @@
 import React, { useState } from 'react';
-import { Container, Row, Col, Button, Card, Badge, Breadcrumb, Offcanvas, Modal } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { FaHome } from 'react-icons/fa';
-import LoginPage from '../pages/LoginPage'; // make sure this file exists
+import Modal from './ui/Modal';
+import MobileMenu from './ui/MobileMenu';
+import LoginPage from '../pages/LoginPage';
 
+const packages = [
+    {
+        id: 'sub-professional',
+        badge: 'Most Popular',
+        title: 'Sub-Professional Reviewer',
+        features: [
+            'Comprehensive Review Modules',
+            'Timed Practice Exams',
+            'Tips & Strategies',
+            '1-Month Access',
+        ],
+        oldPrice: '₱999',
+        price: '₱350',
+    },
+    {
+        id: 'professional',
+        badge: 'Best Value',
+        title: 'Professional Reviewer',
+        features: [
+            'Comprehensive Review Modules',
+            'Simulated Exams',
+            'Expert Exam Strategies',
+            '3-Month Access',
+        ],
+        oldPrice: '₱1499',
+        price: '₱500',
+    },
+];
 
 const Explore = () => {
     const [showMenu, setShowMenu] = useState(false);
@@ -15,147 +44,88 @@ const Explore = () => {
         setShowModal(true);
     };
 
-    const closeModal = () => {
-        setShowModal(false);
-    };
+    const closeModal = () => setShowModal(false);
 
     return (
-        <div style={{ backgroundColor: '#F9FAFB', minHeight: '100vh', paddingBottom: '4rem' }}>
+        <div className="min-h-screen bg-gray-50 pb-16">
             {/* Header */}
-            <div className="d-flex justify-content-between align-items-center px-4 py-3">
-                <Link to="/" style={{ textDecoration: 'none' }}>
-                    <div className="fw-bold fs-4" style={{ color: '#14B8A6', marginLeft: '2.5rem', cursor: 'pointer' }}>SkillSprint
-                    </div>
-                </Link>
-                <div className="d-none d-md-block" style={{ marginRight: '2.5rem' }}>
-                    <Button variant="outline-dark" className="me-2" onClick={() => openModal('login')}>Sign In</Button>
-                    <Button style={{ backgroundColor: '#14B8A6', border: 'none' }} onClick={() => openModal('signup')}>Sign Up</Button>
+            <div className="flex items-center justify-between px-4 py-3 sm:px-8">
+                <Link to="/" className="ml-4 text-xl font-bold text-brand sm:ml-8">SkillSprint</Link>
+                <div className="hidden gap-2 sm:mr-6 md:flex">
+                    <button className="btn-outline" onClick={() => openModal('login')}>Sign In</button>
+                    <button className="btn-primary" onClick={() => openModal('signup')}>Sign Up</button>
                 </div>
-                <div className="d-md-none">
-                    <Button variant="outline-dark" onClick={() => setShowMenu(true)}>☰</Button>
+                <div className="md:hidden">
+                    <button className="btn-outline" onClick={() => setShowMenu(true)} aria-label="Open menu">☰</button>
                 </div>
             </div>
 
-            {/* Offcanvas Menu (Mobile) */}
-            <Offcanvas show={showMenu} onHide={() => setShowMenu(false)} placement="end">
-                <Offcanvas.Header closeButton>
-                    <Offcanvas.Title>Menu</Offcanvas.Title>
-                </Offcanvas.Header>
-                <Offcanvas.Body>
-                    <Button variant="outline-dark" className="w-100 mb-2" onClick={() => { openModal('login'); setShowMenu(false); }}>Sign In</Button>
-                    <Button style={{ backgroundColor: '#14B8A6', border: 'none' }} className="w-100" onClick={() => { openModal('signup'); setShowMenu(false); }}>Sign Up</Button>
-                </Offcanvas.Body>
-            </Offcanvas>
+            <MobileMenu show={showMenu} onClose={() => setShowMenu(false)}>
+                <div className="flex flex-col gap-2">
+                    <button className="btn-outline w-full" onClick={() => { openModal('login'); setShowMenu(false); }}>Sign In</button>
+                    <button className="btn-primary w-full" onClick={() => { openModal('signup'); setShowMenu(false); }}>Sign Up</button>
+                </div>
+            </MobileMenu>
 
-            {/* Modal for Login / Signup */}
-            <Modal show={showModal} onHide={closeModal} centered>
-                <Modal.Body>
-                    <LoginPage mode={authMode} onClose={closeModal} />
-                </Modal.Body>
+            <Modal show={showModal} onClose={closeModal}>
+                <LoginPage mode={authMode} onClose={closeModal} />
             </Modal>
 
-            {/* Explore Content */}
-            <Container style={{ paddingTop: '1rem' }}>
-                <Breadcrumb className="mb-4">
-                    <Breadcrumb.Item linkAs={Link} linkProps={{ to: '/' }} style={{ color: '#6B7280' }}>
-                        <FaHome className="me-2" />
-                    </Breadcrumb.Item>
-                    <Breadcrumb.Item active style={{ color: '#111827' }}>
-                        Explore
-                    </Breadcrumb.Item>
-                </Breadcrumb>
+            <div className="mx-auto max-w-6xl px-4 pt-4">
+                {/* Breadcrumb */}
+                <nav className="mb-4 flex items-center gap-2 text-sm text-gray-500">
+                    <Link to="/" className="hover:text-brand"><FaHome /></Link>
+                    <span>/</span>
+                    <span className="font-medium text-gray-900">Explore</span>
+                </nav>
 
-
-                {/* Hero Section */}
-                <div style={{ backgroundColor: '#E0F7F5', padding: '4rem 1rem' }}>
-                    <Container className="text-center">
-                        <h2 style={{ color: '#111827', fontWeight: 'bold' }}>
-                            Start Your Civil Service Journey with Confidence
-                        </h2>
-                        <p style={{ color: '#6B7280', maxWidth: '700px', margin: '0 auto' }}>
-                            Sign up now and enjoy a <strong>7-day free trial</strong> to access our top-tier review content, mock exams,
-                            and expert guidance — all designed to help you succeed!
-                        </p>
-                        <Button
-                            className="mt-3"
-                            size="lg"
-                            style={{ backgroundColor: '#14B8A6', border: 'none' }}
-                            onClick={() => openModal('signup')}
-                        >
-                            Start 7-Day Free Trial
-                        </Button>
-                    </Container>
+                {/* Hero */}
+                <div className="rounded-2xl bg-brand/10 px-4 py-16 text-center">
+                    <h2 className="text-2xl font-bold text-gray-900 sm:text-3xl">
+                        Start Your Civil Service Journey with Confidence
+                    </h2>
+                    <p className="mx-auto mt-3 max-w-2xl text-gray-500">
+                        Sign up now and enjoy a <strong>7-day free trial</strong> to access our top-tier review content,
+                        mock exams, and expert guidance — all designed to help you succeed!
+                    </p>
+                    <button className="btn-primary mt-5 px-6 py-3 text-base" onClick={() => openModal('signup')}>
+                        Start 7-Day Free Trial
+                    </button>
                 </div>
-                <br/>
 
-                <h1 className="text-center py-2" style={{ color: '#111827', fontWeight: 'bold' }}>
+                <h1 className="mt-12 text-center text-3xl font-bold text-gray-900">
                     Explore Our Review Packages
                 </h1>
-
-                <p className="text-center mb-5" style={{ color: '#6B7280', maxWidth: '800px', margin: '0 auto' }}>
+                <p className="mx-auto mb-10 mt-3 max-w-2xl text-center text-gray-500">
                     Whether you're preparing for the Civil Service Exam or advancing to professional government roles,
                     we've created focused review packages to help you succeed. Each plan includes carefully designed
                     modules, practice tests, and expert tips. Choose the one that best fits your goal, and you'll get
                     immediate access after purchase — no complicated steps required.
                 </p>
 
-                <Row className="g-4">
-                    <Col md={6}>
-                        <Card className="h-100 shadow-sm">
-                            <Card.Body>
-                                <Badge bg="" style={{ backgroundColor: '#14B8A6', color: 'white' }} className="mb-2">
-                                    Most Popular
-                                </Badge>
-                                <Card.Title style={{ color: '#111827' }}>Sub-Professional Reviewer</Card.Title>
-                                <Card.Text style={{ color: '#6B7280' }}>
-                                    <ul>
-                                        <li>Comprehensive Review Modules</li>
-                                        <li>Timed Practice Exams</li>
-                                        <li>Tips & Strategies</li>
-                                        <li>1-Month Access</li>
-                                    </ul>
-                                    <div className="mt-3">
-                                        <span style={{ textDecoration: 'line-through', color: '#6B7280', marginRight: '0.5rem' }}>
-                                            ₱999
-                                        </span>
-                                        <strong style={{ color: '#111827', fontSize: '1.25rem' }}>₱350</strong>
-                                    </div>
-                                </Card.Text>
-                                <Link to="/checkout">
-                                    <Button style={{ backgroundColor: '#14B8A6', border: 'none' }}>Purchase</Button>
-                                </Link>
-                            </Card.Body>
-                        </Card>
-                    </Col>
-                    <Col md={6}>
-                        <Card className="h-100 shadow-sm">
-                            <Card.Body>
-                                <Badge bg="" style={{ backgroundColor: '#14B8A6', color: 'white' }} className="mb-2">
-                                    Best Value
-                                </Badge>
-                                <Card.Title style={{ color: '#111827' }}>Professional Reviewer</Card.Title>
-                                <Card.Text style={{ color: '#6B7280' }}>
-                                    <ul>
-                                        <li>Comprehensive Review Modules</li>
-                                        <li>Simulated Exams</li>
-                                        <li>Expert Exam Strategies</li>
-                                        <li>3-Month Access</li>
-                                    </ul>
-                                    <div className="mt-3">
-                                        <span style={{ textDecoration: 'line-through', color: '#6B7280', marginRight: '0.5rem' }}>
-                                            ₱1499
-                                        </span>
-                                        <strong style={{ color: '#111827', fontSize: '1.25rem' }}>₱500</strong>
-                                    </div>
-                                </Card.Text>
-                                <Link to="/checkout">
-                                    <Button style={{ backgroundColor: '#14B8A6', border: 'none' }}>Purchase</Button>
-                                </Link>
-                            </Card.Body>
-                        </Card>
-                    </Col>
-                </Row>
-            </Container>
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    {packages.map((pkg) => (
+                        <div key={pkg.id} className="card flex h-full flex-col p-6">
+                            <span className="mb-3 inline-block w-fit rounded-full bg-brand px-3 py-1 text-xs font-semibold text-white">
+                                {pkg.badge}
+                            </span>
+                            <h3 className="text-lg font-semibold text-gray-900">{pkg.title}</h3>
+                            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-500">
+                                {pkg.features.map((feature) => (
+                                    <li key={feature}>{feature}</li>
+                                ))}
+                            </ul>
+                            <div className="mt-4">
+                                <span className="mr-2 text-gray-400 line-through">{pkg.oldPrice}</span>
+                                <strong className="text-xl text-gray-900">{pkg.price}</strong>
+                            </div>
+                            <Link to="/checkout" className="mt-4 inline-block w-fit">
+                                <button className="btn-primary">Purchase</button>
+                            </Link>
+                        </div>
+                    ))}
+                </div>
+            </div>
         </div>
     );
 };

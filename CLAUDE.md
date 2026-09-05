@@ -43,6 +43,8 @@ npm test           # react-scripts (Jest) test runner
 
 Note the split toolchain: the dev server is `react-scripts`, but the production bundle is built by the custom `webpack.config.js`. `webroot/react-frontend/dist/main.js` is the committed build artifact that Cloudflare Pages serves — rebuild and commit it when frontend source changes. Both `REACT_APP_API_URL` and `REACT_APP_GOOGLE_CLIENT_ID` are injected at build time via `DefinePlugin`.
 
+Styling is Tailwind CSS (utility classes in JSX; no Bootstrap/react-bootstrap). `tailwind.config.js` and `postcss.config.js` live at the frontend root and are picked up by **both** toolchains: `react-scripts` auto-enables Tailwind's PostCSS plugin just by detecting `tailwind.config.js`, and the production `webpack.config.js` runs `postcss-loader` explicitly in its CSS rule — if that loader step is ever removed, the prod build silently ships unstyled markup. `src/index.css` is the Tailwind entry point (`@tailwind base/components/utilities` plus shared `.btn-*`/`.form-*`/`.card` classes under `@layer components`) and must stay imported from `src/index.js`. The brand teal is aliased as `brand`/`brand-dark` in `tailwind.config.js` (`#14B8A6`/`#0D9488`) — reuse that token rather than hardcoding the hex again. `src/components/ui/Modal.js` and `MobileMenu.js` are the shared dialog/offcanvas primitives that replaced `react-bootstrap`'s `Modal`/`Offcanvas`.
+
 ## Architecture
 
 This is a **CakePHP 5.1** application (PHP 8.1+) running under XAMPP. It acts as a JSON API backend consumed by a React frontend at `http://localhost:3000`. The backend is deployable via Docker (to Railway); the frontend deploys to Cloudflare Pages.

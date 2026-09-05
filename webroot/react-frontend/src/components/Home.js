@@ -1,51 +1,30 @@
 import React from 'react';
-import { Container, Row, Col, Card } from 'react-bootstrap';
 import TopNavbar from './TopNavbar';
 
+const stats = [
+    { title: 'Your Current Plan', body: 'Professional Reviewer' },
+    { title: 'Progress', body: "You've completed 3 out of 10 modules" },
+    { title: 'Upcoming Exam', body: 'Scheduled on June 15, 2025' },
+];
+
 const Home = () => {
-
     return (
-        <div style={{ backgroundColor: '#F9FAFB', minHeight: '100vh' }}>
-            <TopNavbar/>
+        <div className="min-h-screen bg-gray-50">
+            <TopNavbar />
 
-            <Container style={{ paddingTop: '100px' }}>
-                <h2 style={{ color: '#111827', fontWeight: 'bold' }} className="mb-4">
-                    Welcome back, Juan!
-                </h2>
+            <div className="mx-auto max-w-6xl px-4 pt-24">
+                <h2 className="mb-2 text-2xl font-bold text-gray-900">Welcome back, Juan!</h2>
+                <p className="mb-8 text-gray-500">Here's a quick overview of your activity and progress.</p>
 
-                <p style={{ color: '#6B7280' }} className="mb-5">
-                    Here's a quick overview of your activity and progress.
-                </p>
-
-                <Row className="g-4">
-                    <Col md={6} lg={4}>
-                        <Card className="shadow-sm h-100 border-0">
-                            <Card.Body>
-                                <h5 style={{ color: '#14B8A6' }}>Your Current Plan</h5>
-                                <p style={{ color: '#6B7280' }}>Professional Reviewer</p>
-                            </Card.Body>
-                        </Card>
-                    </Col>
-
-                    <Col md={6} lg={4}>
-                        <Card className="shadow-sm h-100 border-0">
-                            <Card.Body>
-                                <h5 style={{ color: '#14B8A6' }}>Progress</h5>
-                                <p style={{ color: '#6B7280' }}>You’ve completed 3 out of 10 modules</p>
-                            </Card.Body>
-                        </Card>
-                    </Col>
-
-                    <Col md={6} lg={4}>
-                        <Card className="shadow-sm h-100 border-0">
-                            <Card.Body>
-                                <h5 style={{ color: '#14B8A6' }}>Upcoming Exam</h5>
-                                <p style={{ color: '#6B7280' }}>Scheduled on June 15, 2025</p>
-                            </Card.Body>
-                        </Card>
-                    </Col>
-                </Row>
-            </Container>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {stats.map((stat) => (
+                        <div key={stat.title} className="card p-5">
+                            <h5 className="font-semibold text-brand">{stat.title}</h5>
+                            <p className="mt-1 text-gray-500">{stat.body}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
         </div>
     );
 };

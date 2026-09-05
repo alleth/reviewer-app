@@ -1,8 +1,6 @@
-import React from 'react';
-import { Navbar, Nav, Container, NavDropdown } from 'react-bootstrap';
+import React, { useEffect, useRef, useState } from 'react';
 import API_URL from '../api';
 
-// This is your logout logic
 const onLogout = async () => {
     try {
         await fetch(`${API_URL}/api/logout`, {
@@ -19,62 +17,55 @@ const onLogout = async () => {
     }
 };
 
-// Just remove `onLogout` from the props!
 const TopNavbar = ({ userName }) => {
+    const [open, setOpen] = useState(false);
+    const menuRef = useRef(null);
+
+    useEffect(() => {
+        const onClickOutside = (e) => {
+            if (menuRef.current && !menuRef.current.contains(e.target)) {
+                setOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', onClickOutside);
+        return () => document.removeEventListener('mousedown', onClickOutside);
+    }, []);
+
     return (
-        <Navbar
-            bg="light"
-            expand="lg"
-            fixed="top"
-            style={{
-                backgroundColor: '#F9FAFB',
-                borderBottom: '1px solid #E5E7EB',
-                boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)',
-                padding: '0.5rem 1rem',
-            }}
-        >
-            <Container fluid>
-                <Navbar.Brand
-                    href="/"
-                    style={{
-                        color: '#14B8A6',
-                        fontWeight: 'bold',
-                        fontSize: '1.25rem',
-                        marginRight: '2rem',
-                    }}
-                >
-                    SkillSprint
-                </Navbar.Brand>
-                <Navbar.Toggle aria-controls="basic-navbar-nav" />
-                <Navbar.Collapse id="basic-navbar-nav" className="justify-content-end">
-                    <Nav>
-                        <NavDropdown
-                            title={
-                                <span style={{ color: '#111827', fontSize: '1rem', fontWeight: '500' }}>
-                                    {userName || 'User'}
-                                </span>
-                            }
-                            id="user-nav-dropdown"
-                            align="end"
-                        >
-                            <NavDropdown.Item href="#notifications" style={{ color: '#111827' }}>
+        <nav className="fixed top-0 z-30 w-full border-b border-gray-200 bg-gray-50 px-4 py-2 shadow-sm">
+            <div className="mx-auto flex max-w-6xl items-center justify-between">
+                <a href="/" className="mr-8 text-lg font-bold text-brand">SkillSprint</a>
+
+                <div className="relative" ref={menuRef}>
+                    <button
+                        type="button"
+                        onClick={() => setOpen((v) => !v)}
+                        className="rounded-md px-2 py-1 text-sm font-medium text-gray-900 hover:bg-gray-100"
+                    >
+                        {userName || 'User'}
+                    </button>
+
+                    {open && (
+                        <div className="absolute right-0 z-10 mt-2 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                            <a href="#notifications" className="block px-4 py-2 text-sm text-gray-900 hover:bg-gray-50">
                                 Notifications
-                            </NavDropdown.Item>
-                            <NavDropdown.Item href="#settings" style={{ color: '#111827' }}>
+                            </a>
+                            <a href="#settings" className="block px-4 py-2 text-sm text-gray-900 hover:bg-gray-50">
                                 Settings
-                            </NavDropdown.Item>
-                            <NavDropdown.Divider />
-                            <NavDropdown.Item
+                            </a>
+                            <div className="my-1 h-px bg-gray-200" />
+                            <button
+                                type="button"
                                 onClick={onLogout}
-                                style={{ color: '#111827', cursor: 'pointer' }}
+                                className="block w-full px-4 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
                             >
                                 Logout
-                            </NavDropdown.Item>
-                        </NavDropdown>
-                    </Nav>
-                </Navbar.Collapse>
-            </Container>
-        </Navbar>
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </nav>
     );
 };
 

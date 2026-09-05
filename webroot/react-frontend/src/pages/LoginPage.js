@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { Form, Button, Alert } from 'react-bootstrap';
 import { GoogleLogin } from '@react-oauth/google';
 import API_URL from '../api';
 
@@ -95,142 +94,123 @@ function LoginPage({ mode = 'login', onClose }) {
     };
 
     return (
-        <div
-            style={{
-                padding: '2rem',
-                borderRadius: '1rem',
-                boxShadow: '0 0 0 rgba(0,0,0,0.05)',
-                color: '#111827'
-            }}
-        >
-            <h4 className="mb-3 text-center fw-bold" style={{ color: '#111827' }}>
+        <div className="p-2">
+            <h4 className="mb-4 text-center text-xl font-bold text-gray-900">
                 {mode === 'signup' ? 'Create an Account' : 'Welcome Back'}
             </h4>
 
             {error && (
-                <Alert variant="danger" className="py-2 px-3" style={{ fontSize: '0.9rem', borderRadius: '0.5rem' }}>
+                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                     {error}
-                </Alert>
+                </div>
             )}
 
-            <Form onSubmit={mode === 'signup' ? handleSignup : handleLogin}>
+            <form onSubmit={mode === 'signup' ? handleSignup : handleLogin} className="space-y-4">
                 {mode === 'signup' && (
                     <>
-                        <div className="d-flex gap-2">
-                            <Form.Group className="mb-3 w-50">
-                                <Form.Label style={{ color: '#6B7280', fontSize: '0.9rem' }}>First Name</Form.Label>
-                                <Form.Control
+                        <div className="flex gap-3">
+                            <div className="w-1/2">
+                                <label className="form-label">First Name</label>
+                                <input
                                     type="text"
                                     name="fname"
                                     value={formData.fname}
                                     onChange={handleChange}
                                     required
-                                    style={{ borderRadius: '0.5rem', fontSize: '0.95rem' }}
+                                    className="form-input"
                                 />
-                            </Form.Group>
-                            <Form.Group className="mb-3 w-50">
-                                <Form.Label style={{ color: '#6B7280', fontSize: '0.9rem' }}>Last Name</Form.Label>
-                                <Form.Control
+                            </div>
+                            <div className="w-1/2">
+                                <label className="form-label">Last Name</label>
+                                <input
                                     type="text"
                                     name="lname"
                                     value={formData.lname}
                                     onChange={handleChange}
                                     required
-                                    style={{ borderRadius: '0.5rem', fontSize: '0.95rem' }}
+                                    className="form-input"
                                 />
-                            </Form.Group>
+                            </div>
                         </div>
 
-                        <Form.Group className="mb-3">
-                            <Form.Label style={{ color: '#6B7280', fontSize: '0.9rem' }}>Email</Form.Label>
-                            <Form.Control
+                        <div>
+                            <label className="form-label">Email</label>
+                            <input
                                 type="email"
                                 name="email"
                                 value={formData.email}
                                 onChange={handleChange}
                                 required
-                                style={{ borderRadius: '0.5rem', fontSize: '0.95rem' }}
+                                className="form-input"
                             />
-                        </Form.Group>
+                        </div>
                     </>
                 )}
 
-                <Form.Group className="mb-3">
-                    <Form.Label style={{ color: '#6B7280', fontSize: '0.9rem' }}>
+                <div>
+                    <label className="form-label">
                         {mode === 'signup' ? 'Username' : 'Username or Email'}
-                    </Form.Label>
-                    <Form.Control
+                    </label>
+                    <input
                         type="text"
                         name="username"
                         value={formData.username}
                         onChange={handleChange}
                         required
-                        style={{ borderRadius: '0.5rem', fontSize: '0.95rem' }}
+                        className="form-input"
                     />
-                </Form.Group>
+                </div>
 
-                <Form.Group className="mb-3">
-                    <Form.Label style={{ color: '#6B7280', fontSize: '0.9rem' }}>Password</Form.Label>
-                    <Form.Control
+                <div>
+                    <label className="form-label">Password</label>
+                    <input
                         type="password"
                         name="password"
                         value={formData.password}
                         onChange={handleChange}
                         required
-                        style={{ borderRadius: '0.5rem', fontSize: '0.95rem' }}
+                        className="form-input"
                     />
-                </Form.Group>
+                </div>
 
                 {mode === 'signup' && (
-                    <Form.Group className="mb-3">
-                        <Form.Label style={{ color: '#6B7280', fontSize: '0.9rem' }}>Re-enter Password</Form.Label>
-                        <Form.Control
+                    <div>
+                        <label className="form-label">Re-enter Password</label>
+                        <input
                             type="password"
                             name="confirmPassword"
                             value={formData.confirmPassword}
                             onChange={handleChange}
                             required
-                            style={{ borderRadius: '0.5rem', fontSize: '0.95rem' }}
+                            className="form-input"
                         />
-                    </Form.Group>
-                )}
-
-                {mode === 'login' && (
-                    <div className="text-end mb-3">
-                        <Button
-                            variant="link"
-                            style={{
-                                color: '#14B8A6',
-                                fontSize: '0.85rem',
-                                textDecoration: 'none',
-                                padding: 0
-                            }}
-                            onClick={() => alert('Redirect to password recovery')}
-                        >
-                            Forgot Password?
-                        </Button>
                     </div>
                 )}
 
-                <Button
-                    type="submit"
-                    style={{
-                        backgroundColor: '#14B8A6',
-                        border: 'none',
-                        borderRadius: '0.5rem',
-                        width: '100%',
-                        fontSize: '1rem'
-                    }}
-                >
-                    {mode === 'signup' ? 'Sign Up' : 'Login'}
-                </Button>
-            </Form>
+                {mode === 'login' && (
+                    <div className="text-right">
+                        <button
+                            type="button"
+                            className="btn-link"
+                            onClick={() => alert('Redirect to password recovery')}
+                        >
+                            Forgot Password?
+                        </button>
+                    </div>
+                )}
 
-            <div className="text-center mt-3 mb-2" style={{ fontSize: '0.85rem', color: '#6B7280' }}>
+                <button type="submit" className="btn-primary w-full py-2.5 text-base">
+                    {mode === 'signup' ? 'Sign Up' : 'Login'}
+                </button>
+            </form>
+
+            <div className="my-4 flex items-center gap-3 text-xs text-gray-400">
+                <div className="h-px flex-1 bg-gray-200" />
                 OR
+                <div className="h-px flex-1 bg-gray-200" />
             </div>
 
-            <div className="d-flex justify-content-center">
+            <div className="flex justify-center">
                 <GoogleLogin
                     onSuccess={handleGoogleSuccess}
                     onError={handleGoogleError}
@@ -240,26 +220,17 @@ function LoginPage({ mode = 'login', onClose }) {
             </div>
 
             {mode === 'signup' && (
-                <div className="text-center mt-4" style={{ fontSize: '0.75rem', color: '#6B7280' }}>
+                <div className="mt-4 text-center text-xs text-gray-500">
                     By signing up, you agree to our{' '}
-                    <a href="/terms" style={{ color: '#14B8A6', textDecoration: 'none' }}>Terms Policy</a> and{' '}
-                    <a href="/privacy" style={{ color: '#14B8A6', textDecoration: 'none' }}>Privacy Notice</a>.
+                    <a href="/terms" className="text-brand hover:text-brand-dark">Terms Policy</a> and{' '}
+                    <a href="/privacy" className="text-brand hover:text-brand-dark">Privacy Notice</a>.
                 </div>
             )}
 
             {onClose && (
-                <Button
-                    variant="link"
-                    className="mt-3 w-100 text-center"
-                    onClick={onClose}
-                    style={{
-                        color: '#6B7280',
-                        textDecoration: 'none',
-                        fontSize: '0.9rem'
-                    }}
-                >
+                <button type="button" className="btn-link mt-4 w-full text-center text-gray-500" onClick={onClose}>
                     Cancel
-                </Button>
+                </button>
             )}
         </div>
     );
