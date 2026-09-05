@@ -4,11 +4,13 @@ module.exports = {
     theme: {
         extend: {
             colors: {
-                // SkillSprint brand teal used throughout the app
+                // SkillSprint brand color — matches Bulma's default palette
+                // (primary turquoise #00D1B2), so it reads as a familiar
+                // "Bulma-style" accent even though the framework is Tailwind.
                 brand: {
-                    DEFAULT: '#14B8A6',
-                    dark: '#0D9488',
-                    light: '#5EEAD4',
+                    DEFAULT: '#00D1B2',
+                    dark: '#009E86',
+                    light: '#CCFFF7',
                 },
             },
             fontFamily: {
