@@ -105,6 +105,8 @@ class UsersController extends AppController
                 }
             }
 
+            $isNewUser = false;
+
             if (!$user) {
                 $userName = strstr($email, '@', true) ?: 'user' . substr($googleId, 0, 8);
                 $suffix = 0;
@@ -128,13 +130,15 @@ class UsersController extends AppController
                         ->withType('application/json')
                         ->withStringBody(json_encode(['success' => false, 'errors' => $user->getErrors()]));
                 }
+
+                $isNewUser = true;
             }
 
             $this->request->getSession()->write('Auth.User', $user);
 
             return $this->response
                 ->withType('application/json')
-                ->withStringBody(json_encode(['success' => true, 'user' => $user]));
+                ->withStringBody(json_encode(['success' => true, 'user' => $user, 'isNewUser' => $isNewUser]));
         } catch (\Exception $e) {
             return $this->response
                 ->withStatus(500)

@@ -58,7 +58,7 @@ const SignInModal = () => {
             if (data.success) {
                 localStorage.setItem('skillsprint_user', JSON.stringify(data.user));
                 handleLoginClose();
-                window.location.href = '/';
+                window.location.href = data.isNewUser ? '/account-setup' : '/';
             } else {
                 alert(data.message || 'Google sign-in failed');
             }

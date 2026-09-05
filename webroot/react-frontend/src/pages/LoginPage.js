@@ -87,7 +87,9 @@ function LoginPage({ mode = 'login', onClose }) {
 
             if (res.data.success) {
                 localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));
-                window.location.href = '/';
+                // Brand-new Google sign-up: give them the option to set a password now,
+                // instead of only finding out later when a manual login attempt fails.
+                window.location.href = res.data.isNewUser ? '/account-setup' : '/';
             } else {
                 setError(res.data.message || 'Google sign-in failed');
             }

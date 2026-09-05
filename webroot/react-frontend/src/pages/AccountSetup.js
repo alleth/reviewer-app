@@ -154,6 +154,14 @@ export default function AccountSetup() {
                         Save and continue
                     </button>
                 </form>
+
+                <button
+                    type="button"
+                    className="btn-link mt-3 w-full text-center text-gray-500"
+                    onClick={() => { window.location.href = '/'; }}
+                >
+                    Set up later
+                </button>
             </div>
         </div>
     );
