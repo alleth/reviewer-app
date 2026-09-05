@@ -33,7 +33,7 @@ function LoginPage({ mode = 'login', onClose }) {
                 setError(res.data.message || 'Invalid credentials');
             }
         } catch (err) {
-            setError('Login failed');
+            setError(err.response?.data?.message || err.response?.data?.error || 'Login failed');
         }
     };
 

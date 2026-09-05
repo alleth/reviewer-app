@@ -15,25 +15,32 @@ class UsersController extends AppController
             ->withHeader('Access-Control-Allow-Origin', '*')
             ->withHeader('Access-Control-Allow-Credentials', 'true');
 
-        // Automatically parses JSON or form data
-        $data = $this->request->getData();
+        try {
+            // Automatically parses JSON or form data
+            $data = $this->request->getData();
 
-        $username = $data['user_name'] ?? '';
-        $password = $data['user_pass'] ?? '';
+            $username = $data['user_name'] ?? '';
+            $password = $data['user_pass'] ?? '';
 
-        // The frontend advertises "Username or Email" on this field, so match either.
-        $user = $this->Users->find()
-            ->where(['OR' => ['user_name' => $username, 'email' => $username]])
-            ->first();
+            // The frontend advertises "Username or Email" on this field, so match either.
+            $user = $this->Users->find()
+                ->where(['OR' => ['user_name' => $username, 'email' => $username]])
+                ->first();
 
-        if ($user && $user->user_pass !== null && password_verify($password, $user->user_pass)) {
-            $this->request->getSession()->write('Auth.User', $user);
-            $response = ['success' => true, 'user' => $user];
-        } elseif ($user && $user->user_pass === null) {
-            // Google-only account: no password was ever set for it.
-            $response = ['success' => false, 'message' => 'This account uses Google Sign-In. Please continue with Google.'];
-        } else {
-            $response = ['success' => false, 'message' => 'Invalid username or password'];
+            if ($user && $user->user_pass !== null && password_verify($password, $user->user_pass)) {
+                $this->request->getSession()->write('Auth.User', $user);
+                $response = ['success' => true, 'user' => $user];
+            } elseif ($user && $user->user_pass === null) {
+                // Google-only account: no password was ever set for it.
+                $response = ['success' => false, 'message' => 'This account uses Google Sign-In. Please continue with Google.'];
+            } else {
+                $response = ['success' => false, 'message' => 'Invalid username or password'];
+            }
+        } catch (\Exception $e) {
+            return $this->response
+                ->withStatus(500)
+                ->withType('application/json')
+                ->withStringBody(json_encode(['success' => false, 'error' => $e->getMessage()]));
         }
 
         return $this->response
