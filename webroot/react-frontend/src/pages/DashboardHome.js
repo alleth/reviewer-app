@@ -1,95 +1,94 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FaBookOpen, FaClipboardCheck, FaChartLine, FaArrowRight } from 'react-icons/fa6';
+import { FaChevronDown } from 'react-icons/fa6';
+import { REVIEWERS, getPurchases } from '../reviewers';
 
-/** Days remaining on a pass, from an ISO expiry string. null when unknown. */
-function daysLeft(iso) {
-    if (!iso) return null;
-    const d = Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
-    return d > 0 ? d : 0;
-}
-
-const quickLinks = [
-    { to: '/topics', Icon: FaBookOpen, title: 'Browse topics', body: 'Study one subject at a time.' },
-    { to: '/mock-exams', Icon: FaClipboardCheck, title: 'Mock exams', body: 'Full-length, timed simulations.' },
-    { to: '/progress', Icon: FaChartLine, title: 'My progress', body: 'See how each topic is going.' },
-];
-
+/**
+ * Progress-monitoring view. Built to span more than the Civil Service Exam —
+ * the reviewer selector lets a user switch which program's progress they're
+ * looking at once they own more than one.
+ */
 export default function DashboardHome({ user }) {
-    const name = user?.fname || user?.user_name || 'there';
-    // These fields aren't on the user object yet — the UI degrades to a
-    // "no active pass" prompt until the backend provides them.
-    const planName = user?.plan_name || null;
-    const left = daysLeft(user?.plan_expires);
+    const purchases = getPurchases(user);
+    const owned = purchases.length
+        ? purchases.map((p) => REVIEWERS[p.reviewer]).filter(Boolean)
+        : [REVIEWERS['civil-service']];
+
+    const [reviewerId, setReviewerId] = useState(owned[0]?.id || 'civil-service');
+    const reviewer = REVIEWERS[reviewerId] || owned[0];
+
+    // No real progress data yet — everything shows the "no activity" state.
+    const hasActivity = false;
 
     return (
-        <>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 sm:text-3xl">
-                Welcome back, {name}
-            </h1>
-            <p className="mt-1 text-gray-500 dark:text-gray-400">
-                Pick up where you left off, or jump into a fresh practice set.
+        <section>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
+
+                <label className="relative">
+                    <select
+                        value={reviewerId}
+                        onChange={(e) => setReviewerId(e.target.value)}
+                        className="appearance-none rounded-lg border border-gray-300 bg-white py-2 pl-3 pr-9 text-sm font-medium text-gray-700 outline-none focus:border-brand focus:ring-2 focus:ring-brand/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                    >
+                        {owned.map((r) => (
+                            <option key={r.id} value={r.id}>{r.name}</option>
+                        ))}
+                    </select>
+                    <FaChevronDown
+                        size={11}
+                        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                    />
+                </label>
+            </div>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Your progress across the {reviewer.name}.
             </p>
 
-            {/* Access status */}
-            {planName ? (
-                <div className="card mt-6 flex items-center justify-between p-5">
-                    <div>
-                        <p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                            Your access
-                        </p>
-                        <p className="mt-0.5 font-semibold text-gray-900 dark:text-gray-100">{planName}</p>
-                    </div>
-                    <div className="text-right">
-                        <p className="text-2xl font-extrabold text-brand-dark dark:text-brand">{left ?? '—'}</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500">days left</p>
-                    </div>
-                </div>
-            ) : (
-                <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand/30 bg-brand/5 p-5 dark:bg-brand/10">
-                    <div>
-                        <p className="font-semibold text-gray-900 dark:text-gray-100">No active pass yet</p>
-                        <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-                            Get a pass to unlock the full reviewer, mock exams and progress tracking.
-                        </p>
-                    </div>
-                    <Link to="/pricing">
-                        <button className="btn-primary">See plans</button>
+            {hasActivity ? null : (
+                <div className="mt-6 card flex flex-col items-center p-8 text-center">
+                    <p className="font-semibold text-gray-900 dark:text-gray-100">No activity yet</p>
+                    <p className="mt-1 max-w-sm text-sm text-gray-500 dark:text-gray-400">
+                        Start a practice set and your scores, streak and per-topic progress will show up here.
+                    </p>
+                    <Link to={`/review/${reviewer.id}`}>
+                        <button className="btn-primary mt-4">Start reviewing</button>
                     </Link>
                 </div>
             )}
 
-            {/* Start practice */}
-            <Link
-                to="/practice"
-                className="group mt-6 flex items-center justify-between gap-4 rounded-2xl bg-gradient-to-br from-brand to-brand-dark p-6 text-white shadow-lg shadow-brand/25 transition-transform hover:-translate-y-0.5"
-            >
-                <div>
-                    <p className="text-sm text-white/80">Ready to review?</p>
-                    <p className="mt-0.5 text-xl font-bold">Start a practice set</p>
-                    <p className="mt-1 text-sm text-white/80">Randomized questions with instant scoring.</p>
-                </div>
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
-                    <FaArrowRight size={20} />
-                </span>
-            </Link>
-
-            {/* Quick links */}
-            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                {quickLinks.map(({ to, Icon, title, body }) => (
-                    <Link
-                        key={to}
-                        to={to}
-                        className="card group flex flex-col p-5 transition-colors hover:border-brand"
-                    >
-                        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand/10 text-brand">
-                            <Icon size={18} />
-                        </span>
-                        <p className="mt-3 font-semibold text-gray-900 dark:text-gray-100">{title}</p>
-                        <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{body}</p>
-                    </Link>
+            {/* Placeholder metric tiles — populated once progress data exists */}
+            <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                {[
+                    { label: 'Questions answered', value: '—' },
+                    { label: 'Average score', value: '—' },
+                    { label: 'Day streak', value: '—' },
+                ].map((t) => (
+                    <div key={t.label} className="card p-4">
+                        <p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                            {t.label}
+                        </p>
+                        <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">{t.value}</p>
+                    </div>
                 ))}
             </div>
-        </>
+
+            <div className="mt-6">
+                <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Progress by topic</h2>
+                <div className="mt-3 space-y-3">
+                    {reviewer.topics.map((topic) => (
+                        <div key={topic}>
+                            <div className="flex justify-between text-sm text-gray-600 dark:text-gray-300">
+                                <span>{topic}</span>
+                                <span className="text-gray-400 dark:text-gray-500">0%</span>
+                            </div>
+                            <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+                                <div className="h-full w-0 rounded-full bg-brand" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </section>
     );
 }
