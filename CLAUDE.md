@@ -25,6 +25,8 @@ composer stan
 
 # Database migrations
 bin/cake migrations migrate
+# (this writes config/Migrations/schema-dump-default.lock — a generated cache
+#  of the last-applied schema; it is not gitignored, leave it untracked)
 
 # Code generation (bake)
 bin/cake bake
@@ -43,7 +45,7 @@ npm test           # react-scripts (Jest) test runner
 
 Note the split toolchain: the dev server is `react-scripts`, but the production bundle is built by the custom `webpack.config.js`. `webroot/react-frontend/dist/main.js` is the committed build artifact that Cloudflare Pages serves — rebuild and commit it when frontend source changes. Both `REACT_APP_API_URL` and `REACT_APP_GOOGLE_CLIENT_ID` are injected at build time via `DefinePlugin`.
 
-Styling is Tailwind CSS (utility classes in JSX; no Bootstrap/react-bootstrap). `tailwind.config.js` and `postcss.config.js` live at the frontend root and are picked up by **both** toolchains: `react-scripts` auto-enables Tailwind's PostCSS plugin just by detecting `tailwind.config.js`, and the production `webpack.config.js` runs `postcss-loader` explicitly in its CSS rule — if that loader step is ever removed, the prod build silently ships unstyled markup. `src/index.css` is the Tailwind entry point (`@tailwind base/components/utilities` plus shared `.btn-*`/`.form-*`/`.card` classes under `@layer components`) and must stay imported from `src/index.js`. The brand color is aliased as `brand`/`brand-dark`/`brand-light` in `tailwind.config.js` (`#00D1B2`/`#009E86`/`#CCFFF7` — matches Bulma's default primary turquoise palette) — reuse that token rather than hardcoding the hex again. `src/components/ui/Modal.js` and `MobileMenu.js` are the shared dialog/offcanvas primitives that replaced `react-bootstrap`'s `Modal`/`Offcanvas`.
+Styling is Tailwind CSS (utility classes in JSX; no Bootstrap/react-bootstrap). `tailwind.config.js` and `postcss.config.js` live at the frontend root and are picked up by **both** toolchains: `react-scripts` auto-enables Tailwind's PostCSS plugin just by detecting `tailwind.config.js`, and the production `webpack.config.js` runs `postcss-loader` explicitly in its CSS rule — if that loader step is ever removed, the prod build silently ships unstyled markup. `src/index.css` is the Tailwind entry point (`@tailwind base/components/utilities` plus shared `.btn-*`/`.form-*`/`.card` classes under `@layer components`) and must stay imported from `src/index.js`. The brand color is aliased as `brand`/`brand-dark`/`brand-light` in `tailwind.config.js` (`#00D1B2`/`#009E86`/`#CCFFF7` — matches Bulma's default primary turquoise palette) — reuse that token rather than hardcoding the hex again. `src/components/ui/Modal.js` and `MobileMenu.js` are the shared dialog/offcanvas primitives that replaced `react-bootstrap`'s `Modal`/`Offcanvas`; `src/components/ui/Logo.js` is the CareerPass logo mark (teal tile, three ascending bars). The product is branded **CareerPass** (renamed from SkillSprint — see the note on the `skillsprint_user` localStorage key, which was deliberately left alone).
 
 ## Architecture
 
@@ -58,6 +60,7 @@ This is a **CakePHP 5.1** application (PHP 8.1+) running under XAMPP. It acts as
 | GET `/api/session` | `UsersController` | `session` |
 | POST `/api/logout` | `UsersController` | `logout` |
 | POST `/api/google-login` | `UsersController` | `googleLogin` |
+| POST `/api/account/setup` | `UsersController` | `setupAccount` |
 | GET/POST `/api/topics` | `Api\TopicsController` | `index` / `add` |
 | GET/PUT/DELETE `/api/topics/:id` | `Api\TopicsController` | `view` / `edit` / `delete` |
 | GET/POST `/api/questions` | `Api\QuestionsController` | `index` / `add` |
@@ -66,7 +69,7 @@ This is a **CakePHP 5.1** application (PHP 8.1+) running under XAMPP. It acts as
 
 The `practice` endpoint returns randomized questions with shuffled choices; accepts `?topic_id=` and `?limit=` (1–50, default 20). The route for it must be declared **before** `resources('Questions')` in `config/routes.php` to prevent `practice` being matched as an ID.
 
-Controllers in the `Api\` namespace live under `src/Controller/Api/`. Auth routes (`login`, `register`, `logout`, `session`, `google-login`) are handled by `UsersController` in the root namespace and connected explicitly (not via `resources()`).
+Controllers in the `Api\` namespace live under `src/Controller/Api/`. Auth routes (`login`, `register`, `logout`, `session`, `google-login`, `account/setup`) are handled by `UsersController` in the root namespace and connected explicitly (not via `resources()`).
 
 **Dead code — do not edit by mistake:** `src/Controller/Api/LoginController.php` (a legacy `sessionCheck`/`logout`/`options` stub using the removed `RequestHandler` component) and `src/Controller/ApiController.php` (empty) are unrouted leftovers. The live auth logic is entirely in `UsersController`.
 
@@ -78,16 +81,21 @@ CORS is handled by `CorsMiddleware` (`src/Middleware/CorsMiddleware.php`), added
 
 **No CSRF middleware is registered at all** — it was removed entirely (not merely skipped for `/api/`) to allow the cross-origin SPA to POST. The full queue is: `CorsMiddleware` → `ErrorHandlerMiddleware` → `AssetMiddleware` → `RoutingMiddleware` → `BodyParserMiddleware`.
 
+**CSRF is instead enforced per-action** by `UsersController::requireAjaxHeader()`, called at the top of every state-changing auth action (`login`, `register`, `logout`, `googleLogin`, `setupAccount`). It 403s any request without `X-Requested-With: XMLHttpRequest`. The reasoning: a plain HTML `<form>` POST (the classic CSRF vector) can't set custom headers, and a cross-origin `fetch`/XHR that does set one triggers a CORS preflight that `CorsMiddleware` only allows for `FRONTEND_URL` — so the header requirement reuses the existing CORS policy as an effective CSRF check. Any new auth action must call this gate; any new frontend caller must go through the `api` axios instance in `webroot/react-frontend/src/api.js` (which sets that header + `withCredentials`), not a bare `axios`/`fetch`.
+
+Session cookies are configured (`config/app.php` → `Session.ini`) as `SameSite=None; Secure; HttpOnly` — required for the cross-origin SPA to send them at all, which is also *why* the header gate above is needed.
+
 ### Authentication
 
 Authentication is manual — no CakePHP Auth or Authentication plugin is used. All actions write/read the session key `Auth.User`.
 
-- **`login()`** — `password_verify()` against the stored `user_pass` hash, then `session()->write('Auth.User', $user)`.
-- **`googleLogin()`** — verifies a Google ID token (`credential` in the POST body) with `google/apiclient`'s `\Google_Client::verifyIdToken()`, using the `GOOGLE_CLIENT_ID` env var. User lookup order: by `google_id`, then by `email` (back-fills `google_id` on the existing row), then creates a new user with a de-duplicated `user_name` derived from the email local-part. On success writes `Auth.User`.
+- **`login()`** — `password_verify()` against the stored `user_pass` hash, then `session()->write('Auth.User', $user)`. If the matched user has `user_pass === null` (a Google-only account), it returns `200` with `{ success: false, needsGoogleSetup: true, account: {...} }` so the SPA can prompt "continue with Google to finish setup" instead of showing a generic error.
+- **`googleLogin()`** — verifies a Google ID token (`credential` in the POST body) with `google/apiclient`'s `\Google_Client::verifyIdToken()`, using the `GOOGLE_CLIENT_ID` env var. User lookup order: by `google_id`, then by `email` (back-fills `google_id` on the existing row), then creates a new user with a de-duplicated `user_name` derived from the email local-part. On success writes `Auth.User` and returns `isNewUser` so the frontend can route brand-new sign-ups to account setup.
+- **`setupAccount()`** — for a logged-in Google-only account (`user_pass` is null): sets a password for the first time (and optionally touches up `fname`/`lname`/`user_name`). 409s if a password already exists — this is first-time setup, **not** a change-password flow. Rewrites `Auth.User` on success.
 - **`session()`** — returns `{ loggedIn, user }` and sends `Cache-Control: no-store` / `Pragma: no-cache` so the SPA never gets a stale login state.
 - **`logout()`** — `session()->delete('Auth.User')` + `session()->renew()` (deliberately *not* `destroy()`, which caused issues in production).
 
-**Frontend auth state lives in `localStorage`** (key `skillsprint_user`), not cookies — cross-origin session cookies between Cloudflare Pages and Railway were unreliable. `index.js` gates on the localStorage entry first, then confirms against `/api/session` with `withCredentials: true`.
+**Frontend auth state lives in `localStorage`** (key `skillsprint_user` — unchanged despite the SkillSprint→CareerPass rebrand; renaming it would silently log everyone out), not cookies — cross-origin session cookies between Cloudflare Pages and Railway were unreliable. `index.js` gates on the localStorage entry first, then confirms against `/api/session` with `withCredentials: true`. The React route `/account-setup` (`src/pages/AccountSetup.js`) is reachable regardless of login state and self-redirects to `/` when there's no stored user.
 
 ### Data Model
 
@@ -105,7 +113,8 @@ The migration for topics/questions/choices is `config/Migrations/20260529000000_
 - Backend env: `config/.env` (copy from `config/.env.example`). Key vars: `FRONTEND_URL`, `SECURITY_SALT`, `DATABASE_URL`, `GOOGLE_CLIENT_ID` (read by `googleLogin()`; **not** listed in `.env.example` — add it manually, and set it on Railway).
 - `config/app_local.php` (not committed — copy from `config/app_local.example.php`) sets the database connection under `Datasources.default`.
 - Frontend env: `webroot/react-frontend/.env` (copy from `.env.example`). Key vars: `REACT_APP_API_URL` (defaults to `http://localhost/reviewer_app` in `src/api.js`) and `REACT_APP_GOOGLE_CLIENT_ID` (must match the backend's `GOOGLE_CLIENT_ID`; set it on Cloudflare Pages).
-- Test suite defaults to SQLite (`tmp/tests.sqlite`) via `DATABASE_TEST_URL` env var.
+- Test suite defaults to SQLite (`sqlite://127.0.0.1/tmp/tests.sqlite`, set in `config/app_local.php`) unless `DATABASE_TEST_URL` overrides it.
+- The default connection's `driver` is `App\Database\Driver\Mysql` (`src/Database/Driver/Mysql.php`), **not** CakePHP's core `Cake\Database\Driver\Mysql`. It's a one-line subclass that populates `RETRY_ERROR_CODES` (2002/2003/2006/2013) so CakePHP's built-in connection-retry actually fires — it absorbs the cold-start race against MySQL on Railway's scale-to-zero trial plan. Keep `config/app.php` pointed at the subclass.
 
 ### Testing
 
@@ -119,3 +128,5 @@ Tests live in `tests/TestCase/`, mirroring `src/`. Integration tests use `Integr
 ### Deployment
 
 The `Dockerfile` builds a `php:8.2-apache` image with `pdo_mysql`, sets `DocumentRoot` to `webroot/`, and installs Composer deps without dev packages. Intended for Railway (backend) + Cloudflare Pages (frontend) hosting.
+
+`railway.toml` sets `deploy.sleepApplication = true` (trial plan requires scale-to-zero when idle). This is the reason for the retrying MySQL driver above: the first request after an idle period races the app's cold start against MySQL becoming reachable on Railway's private network.
