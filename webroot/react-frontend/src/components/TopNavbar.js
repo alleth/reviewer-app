@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { FaChevronDown } from 'react-icons/fa6';
 import { api } from '../api';
 import Logo from './ui/Logo';
 import ThemeToggle from './ui/ThemeToggle';
@@ -44,9 +45,15 @@ const TopNavbar = ({ userName }) => {
                         <button
                             type="button"
                             onClick={() => setOpen((v) => !v)}
-                            className="rounded-md px-2 py-1 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
+                            aria-haspopup="menu"
+                            aria-expanded={open}
+                            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
                         >
                             {userName || 'User'}
+                            <FaChevronDown
+                                size={10}
+                                className={`text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}
+                            />
                         </button>
 
                         {open && (
