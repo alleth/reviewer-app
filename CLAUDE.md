@@ -61,6 +61,7 @@ This is a **CakePHP 5.1** application (PHP 8.1+) running under XAMPP. It acts as
 | POST `/api/logout` | `UsersController` | `logout` |
 | POST `/api/google-login` | `UsersController` | `googleLogin` |
 | POST `/api/account/setup` | `UsersController` | `setupAccount` |
+| POST/PUT/PATCH `/api/account` | `UsersController` | `updateAccount` |
 | GET/POST `/api/topics` | `Api\TopicsController` | `index` / `add` |
 | GET/PUT/DELETE `/api/topics/:id` | `Api\TopicsController` | `view` / `edit` / `delete` |
 | GET/POST `/api/questions` | `Api\QuestionsController` | `index` / `add` |
@@ -69,7 +70,7 @@ This is a **CakePHP 5.1** application (PHP 8.1+) running under XAMPP. It acts as
 
 The `practice` endpoint returns randomized questions with shuffled choices; accepts `?topic_id=` and `?limit=` (1–50, default 20). The route for it must be declared **before** `resources('Questions')` in `config/routes.php` to prevent `practice` being matched as an ID.
 
-Controllers in the `Api\` namespace live under `src/Controller/Api/`. Auth routes (`login`, `register`, `logout`, `session`, `google-login`, `account/setup`) are handled by `UsersController` in the root namespace and connected explicitly (not via `resources()`).
+Controllers in the `Api\` namespace live under `src/Controller/Api/`. Auth/account routes (`login`, `register`, `logout`, `session`, `google-login`, `account/setup`, `account`) are handled by `UsersController` in the root namespace and connected explicitly (not via `resources()`). `updateAccount` (`POST /api/account`) patches profile fields only (name/username/email) for the logged-in user — never the password.
 
 **Dead code — do not edit by mistake:** `src/Controller/Api/LoginController.php` (a legacy `sessionCheck`/`logout`/`options` stub using the removed `RequestHandler` component) and `src/Controller/ApiController.php` (empty) are unrouted leftovers. The live auth logic is entirely in `UsersController`.
 
@@ -92,8 +93,11 @@ Authentication is manual — no CakePHP Auth or Authentication plugin is used. A
 - **`login()`** — `password_verify()` against the stored `user_pass` hash, then `session()->write('Auth.User', $user)`. If the matched user has `user_pass === null` (a Google-only account), it returns `200` with `{ success: false, needsGoogleSetup: true, account: {...} }` so the SPA can prompt "continue with Google to finish setup" instead of showing a generic error.
 - **`googleLogin()`** — verifies a Google ID token (`credential` in the POST body) with `google/apiclient`'s `\Google_Client::verifyIdToken()`, using the `GOOGLE_CLIENT_ID` env var. User lookup order: by `google_id`, then by `email` (back-fills `google_id` on the existing row), then creates a new user with a de-duplicated `user_name` derived from the email local-part. On success writes `Auth.User` and returns `isNewUser` so the frontend can route brand-new sign-ups to account setup.
 - **`setupAccount()`** — for a logged-in Google-only account (`user_pass` is null): sets a password for the first time (and optionally touches up `fname`/`lname`/`user_name`). 409s if a password already exists — this is first-time setup, **not** a change-password flow. Rewrites `Auth.User` on success.
+- **`updateAccount()`** — `POST /api/account`, logged-in + AJAX-header gated. Patches `fname`/`lname`/`user_name`/`email` only (never `user_pass`), re-writes `Auth.User`. Backs the Settings page profile form.
 - **`session()`** — returns `{ loggedIn, user }` and sends `Cache-Control: no-store` / `Pragma: no-cache` so the SPA never gets a stale login state.
 - **`logout()`** — `session()->delete('Auth.User')` + `session()->renew()` (deliberately *not* `destroy()`, which caused issues in production).
+
+The serialized `user` object **omits `user_pass`** (`$_hidden` on the `User` entity — it used to leak the bcrypt hash into every response and into `localStorage`) and adds a virtual **`password_set`** boolean the Settings/AccountSetup UI uses to show account-completion state.
 
 **Frontend auth state lives in `localStorage`** (key `skillsprint_user` — unchanged despite the SkillSprint→CareerPass rebrand; renaming it would silently log everyone out), not cookies — cross-origin session cookies between Cloudflare Pages and Railway were unreliable. `index.js` gates on the localStorage entry first, then confirms against `/api/session` with `withCredentials: true`. The React route `/account-setup` (`src/pages/AccountSetup.js`) is reachable regardless of login state and self-redirects to `/` when there's no stored user.
 

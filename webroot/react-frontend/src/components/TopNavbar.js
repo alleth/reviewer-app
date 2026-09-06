@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { FaChevronDown } from 'react-icons/fa6';
 import { api } from '../api';
 import Logo from './ui/Logo';
@@ -58,12 +59,13 @@ const TopNavbar = ({ userName }) => {
 
                         {open && (
                             <div className="absolute right-0 z-10 mt-2 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
-                                <a href="#notifications" className="block px-4 py-2 text-sm text-gray-900 hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-700">
-                                    Notifications
-                                </a>
-                                <a href="#settings" className="block px-4 py-2 text-sm text-gray-900 hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-700">
+                                <Link
+                                    to="/settings"
+                                    onClick={() => setOpen(false)}
+                                    className="block px-4 py-2 text-sm text-gray-900 hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-700"
+                                >
                                     Settings
-                                </a>
+                                </Link>
                                 <div className="my-1 h-px bg-gray-200 dark:bg-gray-700" />
                                 <button
                                     type="button"

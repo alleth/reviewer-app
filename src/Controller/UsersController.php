@@ -251,6 +251,60 @@ class UsersController extends AppController
         }
     }
 
+    /**
+     * Updates the logged-in user's profile fields (name, username, email) from
+     * the Settings page. Does not touch the password — that's setupAccount() for
+     * first-time setup, and a dedicated change-password flow later.
+     */
+    public function updateAccount(): \Cake\Http\Response
+    {
+        $this->request->allowMethod(['post', 'put', 'patch']);
+
+        if ($blocked = $this->requireAjaxHeader()) {
+            return $blocked;
+        }
+
+        $sessionUser = $this->request->getSession()->read('Auth.User');
+        if (!$sessionUser) {
+            return $this->response
+                ->withStatus(401)
+                ->withType('application/json')
+                ->withStringBody(json_encode(['success' => false, 'message' => 'Not logged in']));
+        }
+
+        try {
+            $user = $this->Users->get($sessionUser->user_id);
+
+            $data = $this->request->getData();
+            $patch = [];
+            foreach (['fname', 'lname', 'user_name', 'email'] as $field) {
+                if (array_key_exists($field, $data)) {
+                    $patch[$field] = trim((string)$data[$field]);
+                }
+            }
+
+            $user = $this->Users->patchEntity($user, $patch);
+
+            if (!$this->Users->save($user)) {
+                return $this->response
+                    ->withStatus(422)
+                    ->withType('application/json')
+                    ->withStringBody(json_encode(['success' => false, 'errors' => $user->getErrors()]));
+            }
+
+            $this->request->getSession()->write('Auth.User', $user);
+
+            return $this->response
+                ->withType('application/json')
+                ->withStringBody(json_encode(['success' => true, 'user' => $user]));
+        } catch (\Exception $e) {
+            return $this->response
+                ->withStatus(500)
+                ->withType('application/json')
+                ->withStringBody(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+    }
+
     public function logout(): \Cake\Http\Response
     {
         $this->request->allowMethod(['post']);

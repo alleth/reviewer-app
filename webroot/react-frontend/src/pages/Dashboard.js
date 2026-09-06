@@ -6,6 +6,7 @@ import DashboardHome from './DashboardHome';
 import MyLibrary from './MyLibrary';
 import DashboardPlans from './DashboardPlans';
 import Review from './Review';
+import Settings from './Settings';
 import Pricing from './Pricing';
 
 function readUser() {
@@ -44,6 +45,7 @@ function DashboardShell({ user }) {
                             <Route path="/library" element={<MyLibrary user={user} />} />
                             <Route path="/dashboard" element={<DashboardHome user={user} />} />
                             <Route path="/plans" element={<DashboardPlans user={user} />} />
+                            <Route path="/settings" element={<Settings />} />
                             <Route path="/review/:reviewer" element={<Review user={user} />} />
                             <Route path="*" element={<ComingSoon />} />
                         </Routes>
