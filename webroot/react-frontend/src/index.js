@@ -55,19 +55,26 @@ function AppWrapper() {
 
         checkSession();
 
-        // Re-check when the user comes back to this tab, so a device that was
-        // superseded by a login elsewhere gets signed out promptly instead of
-        // only on a full reload.
-        const onFocus = () => {
+        // Keep the session fresh without a manual refresh: poll while the tab is
+        // visible, and re-check the moment it regains focus. A superseded device
+        // (someone logged in elsewhere) then signs itself out within ~25s, or
+        // instantly when the user comes back to it. Polling pauses while the tab
+        // is hidden so the scale-to-zero backend can still sleep.
+        const onVisible = () => {
             if (document.visibilityState === 'visible') checkSession();
         };
-        document.addEventListener('visibilitychange', onFocus);
-        window.addEventListener('focus', onFocus);
+        document.addEventListener('visibilitychange', onVisible);
+        window.addEventListener('focus', onVisible);
+
+        const interval = setInterval(() => {
+            if (document.visibilityState === 'visible') checkSession();
+        }, 25000);
 
         return () => {
             cancelled = true;
-            document.removeEventListener('visibilitychange', onFocus);
-            window.removeEventListener('focus', onFocus);
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', onVisible);
+            window.removeEventListener('focus', onVisible);
         };
     }, []);
 
