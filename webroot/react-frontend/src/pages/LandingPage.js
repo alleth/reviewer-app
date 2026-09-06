@@ -45,10 +45,20 @@ const LandingPage = () => {
     const [showModal, setShowModal] = useState(false);
     const [authMode, setAuthMode] = useState('login');
     const [showMenu, setShowMenu] = useState(false);
+    const [signedOutNotice, setSignedOutNotice] = useState(false);
 
     useEffect(() => {
         window.scrollTo(0, 0);
     }, [location.pathname]);
+
+    useEffect(() => {
+        try {
+            if (sessionStorage.getItem('careerpass_signed_out') === 'elsewhere') {
+                setSignedOutNotice(true);
+                sessionStorage.removeItem('careerpass_signed_out');
+            }
+        } catch (e) { /* ignore */ }
+    }, []);
 
     const openModal = (mode) => {
         setAuthMode(mode);
@@ -70,6 +80,11 @@ const LandingPage = () => {
 
             {/* Page Content */}
             <div className="relative z-[2] flex-1">
+                {signedOutNotice && (
+                    <div className="border-b border-amber-300 bg-amber-50 px-4 py-2.5 text-center text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300">
+                        You were signed out here because your account signed in on another device.
+                    </div>
+                )}
                 {/* Header */}
                 <div className="flex items-center justify-between px-4 py-3 sm:px-8">
                     <Link to="/" className="ml-4 flex items-center sm:ml-8" style={{ gap: '7px' }}>

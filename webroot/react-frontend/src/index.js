@@ -16,21 +16,59 @@ function AppWrapper() {
     const [isLoggedIn, setIsLoggedIn] = useState(null);
 
     useEffect(() => {
-        const stored = localStorage.getItem('skillsprint_user');
-        if (!stored) {
-            setIsLoggedIn(false);
-            return;
-        }
-        axios.get(`${API_URL}/api/session?t=${Date.now()}`, { withCredentials: true })
-            .then(res => {
-                if (res.data.loggedIn) {
-                    setIsLoggedIn(true);
-                } else {
+        let cancelled = false;
+        let wasLoggedIn = false;
+
+        const checkSession = () => {
+            const stored = localStorage.getItem('skillsprint_user');
+            if (!stored) {
+                if (!cancelled) setIsLoggedIn(false);
+                return;
+            }
+            axios.get(`${API_URL}/api/session?t=${Date.now()}`, { withCredentials: true })
+                .then((res) => {
+                    if (cancelled) return;
+                    if (res.data.loggedIn) {
+                        wasLoggedIn = true;
+                        setIsLoggedIn(true);
+                        return;
+                    }
                     localStorage.removeItem('skillsprint_user');
+                    if (res.data.reason === 'signed_in_elsewhere') {
+                        try {
+                            sessionStorage.setItem('careerpass_signed_out', 'elsewhere');
+                        } catch (e) { /* ignore */ }
+                    }
+                    // If this device had a live session that's now gone, do a full
+                    // reload to the landing page rather than leaving a logged-in
+                    // route rendering with no session behind it.
+                    if (wasLoggedIn) {
+                        window.location.assign('/');
+                        return;
+                    }
                     setIsLoggedIn(false);
-                }
-            })
-            .catch(() => setIsLoggedIn(false));
+                })
+                .catch(() => {
+                    if (!cancelled) setIsLoggedIn(false);
+                });
+        };
+
+        checkSession();
+
+        // Re-check when the user comes back to this tab, so a device that was
+        // superseded by a login elsewhere gets signed out promptly instead of
+        // only on a full reload.
+        const onFocus = () => {
+            if (document.visibilityState === 'visible') checkSession();
+        };
+        document.addEventListener('visibilitychange', onFocus);
+        window.addEventListener('focus', onFocus);
+
+        return () => {
+            cancelled = true;
+            document.removeEventListener('visibilitychange', onFocus);
+            window.removeEventListener('focus', onFocus);
+        };
     }, []);
 
     if (isLoggedIn === null) {

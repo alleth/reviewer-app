@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Model\Entity\User;
 use Cake\Http\Response;
 
 class UsersController extends AppController
@@ -32,6 +33,60 @@ class UsersController extends AppController
         return null;
     }
 
+    /**
+     * Establishes a fresh single-device session for $user: rotates the account's
+     * session_token (which invalidates any session on another device), and
+     * writes the user + token into this session.
+     */
+    private function startSession(User $user): void
+    {
+        $token = bin2hex(random_bytes(20));
+        $user->session_token = $token;
+        $this->Users->save($user);
+
+        $session = $this->request->getSession();
+        $session->renew();
+        $session->write('Auth.User', $user);
+        $session->write('Auth.token', $token);
+    }
+
+    /**
+     * The logged-in user's id, or null when there's no session — or when this
+     * session has been superseded by a login on another device (in which case
+     * the stale session is cleared here). Sessions created before session_token
+     * existed are grandfathered in until their next login.
+     */
+    private function activeUserId(): ?int
+    {
+        $session = $this->request->getSession();
+        $user = $session->read('Auth.User');
+        if (!$user) {
+            return null;
+        }
+
+        $sessionToken = $session->read('Auth.token');
+        $current = $this->Users->find()
+            ->select(['user_id', 'session_token'])
+            ->where(['user_id' => $user->user_id])
+            ->first();
+        $dbToken = $current?->session_token;
+
+        // Pre-rollout session (neither side has a token yet) — leave it be.
+        if ($sessionToken === null && $dbToken === null) {
+            return (int)$user->user_id;
+        }
+
+        if (!$current || $sessionToken === null || $sessionToken !== $dbToken) {
+            $session->delete('Auth.User');
+            $session->delete('Auth.token');
+            $session->renew();
+
+            return null;
+        }
+
+        return (int)$user->user_id;
+    }
+
     public function login()
     {
         $this->request->allowMethod(['post']);
@@ -58,7 +113,7 @@ class UsersController extends AppController
                 ->first();
 
             if ($user && $user->user_pass !== null && password_verify($password, $user->user_pass)) {
-                $this->request->getSession()->write('Auth.User', $user);
+                $this->startSession($user);
                 $response = ['success' => true, 'user' => $user];
             } elseif ($user && $user->user_pass === null) {
                 // Google-only account: no password was ever set for it. Give the frontend
@@ -168,7 +223,7 @@ class UsersController extends AppController
                 $isNewUser = true;
             }
 
-            $this->request->getSession()->write('Auth.User', $user);
+            $this->startSession($user);
 
             return $this->response
                 ->withType('application/json')
@@ -195,8 +250,8 @@ class UsersController extends AppController
             return $blocked;
         }
 
-        $sessionUser = $this->request->getSession()->read('Auth.User');
-        if (!$sessionUser) {
+        $userId = $this->activeUserId();
+        if (!$userId) {
             return $this->response
                 ->withStatus(401)
                 ->withType('application/json')
@@ -204,7 +259,7 @@ class UsersController extends AppController
         }
 
         try {
-            $user = $this->Users->get($sessionUser->user_id);
+            $user = $this->Users->get($userId);
 
             if ($user->user_pass !== null) {
                 return $this->response
@@ -264,8 +319,8 @@ class UsersController extends AppController
             return $blocked;
         }
 
-        $sessionUser = $this->request->getSession()->read('Auth.User');
-        if (!$sessionUser) {
+        $userId = $this->activeUserId();
+        if (!$userId) {
             return $this->response
                 ->withStatus(401)
                 ->withType('application/json')
@@ -273,7 +328,7 @@ class UsersController extends AppController
         }
 
         try {
-            $user = $this->Users->get($sessionUser->user_id);
+            $user = $this->Users->get($userId);
 
             $data = $this->request->getData();
             $patch = [];
@@ -324,7 +379,14 @@ class UsersController extends AppController
 
     public function session(): \Cake\Http\Response
     {
-        $user = $this->request->getSession()->read('Auth.User');
+        $session = $this->request->getSession();
+        $wasLoggedIn = $session->read('Auth.User') !== null;
+
+        $userId = $this->activeUserId();
+        $user = $userId ? $session->read('Auth.User') : null;
+        // Set when this device was signed out because the account signed in
+        // somewhere else — lets the SPA show a message.
+        $supersededElsewhere = $wasLoggedIn && $user === null;
 
         return $this->response
             ->withType('application/json')
@@ -334,6 +396,7 @@ class UsersController extends AppController
                 'success' => true,
                 'loggedIn' => $user !== null,
                 'user' => $user,
+                'reason' => $supersededElsewhere ? 'signed_in_elsewhere' : null,
             ]));
     }
 

@@ -14,6 +14,7 @@ use Cake\ORM\Entity;
  * @property string|null $email
  * @property string|null $user_name
  * @property string|null $user_pass
+ * @property string|null $session_token
  * @property bool $password_set
  */
 class User extends Entity
@@ -33,12 +34,13 @@ class User extends Entity
     ];
 
     /**
-     * Never expose the password hash in API responses (it used to be sent to
-     * the client and stored in localStorage).
+     * Never expose the password hash or the single-device session token in API
+     * responses (the hash used to be sent to the client and stored in
+     * localStorage).
      *
      * @var list<string>
      */
-    protected array $_hidden = ['user_pass'];
+    protected array $_hidden = ['user_pass', 'session_token'];
 
     /**
      * Virtual fields serialized alongside the real ones.
