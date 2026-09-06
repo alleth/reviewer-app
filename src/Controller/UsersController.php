@@ -19,14 +19,15 @@ class UsersController extends AppController
      * (EMAIL_TRANSPORT_DEFAULT_URL unset) the code is written to the error log
      * instead, so the flow is testable before SMTP is wired up.
      */
-    private function sendAuthCode(string $email, string $code, string $intro): void
+    /**
+     * Sends one email. When no transport is configured
+     * (EMAIL_TRANSPORT_DEFAULT_URL unset) the message is written to the error
+     * log instead, so email-dependent flows stay testable before SMTP is wired.
+     */
+    private function sendMail(string $email, string $subject, string $body): void
     {
-        $body = "$intro\n\nYour code is: $code\n\n"
-            . 'It expires in ' . self::CODE_TTL_MINUTES . ' minutes. '
-            . "If you didn't request this, you can ignore this email.";
-
         if (empty(env('EMAIL_TRANSPORT_DEFAULT_URL'))) {
-            Log::warning("[auth-code] no mailer configured - code for $email: $code");
+            Log::warning("[mail] no transport - to $email | $subject | $body");
 
             return;
         }
@@ -35,11 +36,20 @@ class UsersController extends AppController
             (new Mailer('default'))
                 ->setFrom(env('EMAIL_FROM', 'CareerPass <no-reply@careerpass.local>'))
                 ->setTo($email)
-                ->setSubject('Your CareerPass verification code')
+                ->setSubject($subject)
                 ->deliver($body);
         } catch (\Exception $e) {
-            Log::error("[auth-code] send failed for $email: {$e->getMessage()} — code: $code");
+            Log::error("[mail] send failed for $email: {$e->getMessage()}");
         }
+    }
+
+    private function sendAuthCode(string $email, string $code, string $intro): void
+    {
+        $body = "$intro\n\nYour code is: $code\n\n"
+            . 'It expires in ' . self::CODE_TTL_MINUTES . ' minutes. '
+            . "If you didn't request this, you can ignore this email.";
+
+        $this->sendMail($email, 'Your CareerPass verification code', $body);
     }
 
     /**
@@ -336,6 +346,9 @@ class UsersController extends AppController
      * first time, and touch up the profile fields Google login auto-derived. Refuses to
      * run once a password already exists — this is first-time setup, not a change-password
      * flow (which would need the current password).
+     *
+     * Two-step: the first call (no `code`) emails a verification code and returns
+     * `needsCode: true`; the second call must include that `code`.
      */
     public function setupAccount(): \Cake\Http\Response
     {
@@ -370,6 +383,29 @@ class UsersController extends AppController
                     ->withStatus(422)
                     ->withType('application/json')
                     ->withStringBody(json_encode(['success' => false, 'message' => 'Password is required.']));
+            }
+
+            $code = trim((string)($data['code'] ?? ''));
+            if ($code === '') {
+                $this->sendAuthCode(
+                    $user->email,
+                    $this->issueCode($userId, 'set_password'),
+                    "Confirm it's you before setting a password on your CareerPass account.",
+                );
+
+                return $this->response
+                    ->withType('application/json')
+                    ->withStringBody(json_encode([
+                        'success' => false,
+                        'needsCode' => true,
+                        'message' => 'We emailed you a 6-digit code to confirm it\'s you.',
+                    ]));
+            }
+            if (!$this->consumeCode($userId, 'set_password', $code)) {
+                return $this->json(
+                    ['success' => false, 'message' => 'That code is wrong or has expired. Request a new one.'],
+                    400,
+                );
             }
 
             $patch = ['user_pass' => password_hash($password, PASSWORD_DEFAULT)];
@@ -618,6 +654,69 @@ class UsersController extends AppController
         return $this->json([
             'success' => true,
             'message' => 'Password updated. You can sign in now.',
+        ]);
+    }
+
+    /**
+     * Changes the password for a logged-in account that already has one. Needs
+     * the current password. Rotates session_token to sign out other devices,
+     * but keeps this one signed in, and emails a heads-up.
+     */
+    public function changePassword(): Response
+    {
+        $this->request->allowMethod(['post']);
+        if ($blocked = $this->requireAjaxHeader()) {
+            return $blocked;
+        }
+
+        $userId = $this->activeUserId();
+        if (!$userId) {
+            return $this->json(['success' => false, 'message' => 'Not logged in'], 401);
+        }
+
+        $data = $this->request->getData();
+        $current = (string)($data['current_password'] ?? '');
+        $next = (string)($data['new_password'] ?? '');
+
+        if (strlen($next) < 8) {
+            return $this->json(
+                ['success' => false, 'message' => 'New password must be at least 8 characters.'],
+                422,
+            );
+        }
+
+        $user = $this->Users->get($userId);
+
+        if ($user->user_pass === null) {
+            return $this->json(
+                ['success' => false, 'message' => 'This account has no password yet — set one from account setup.'],
+                409,
+            );
+        }
+        if (!password_verify($current, $user->user_pass)) {
+            return $this->json(['success' => false, 'message' => 'Your current password is incorrect.'], 400);
+        }
+
+        $newToken = bin2hex(random_bytes(20));
+        $user->user_pass = password_hash($next, PASSWORD_DEFAULT);
+        $user->session_token = $newToken;
+        $this->Users->save($user);
+
+        // Keep this device signed in; every other session's token is now stale.
+        $session = $this->request->getSession();
+        $session->write('Auth.token', $newToken);
+        $session->write('Auth.User', $user);
+
+        $this->sendMail(
+            $user->email,
+            'Your CareerPass password was changed',
+            "Your CareerPass password was just changed and other devices were signed out.\n\n"
+            . "If this wasn't you, reset your password immediately using \"Forgot password\" on the sign-in screen.",
+        );
+
+        return $this->json([
+            'success' => true,
+            'message' => 'Password changed. Other devices have been signed out.',
         ]);
     }
 }

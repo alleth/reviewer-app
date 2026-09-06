@@ -4,9 +4,11 @@ import ThemeToggle from '../components/ui/ThemeToggle';
 import { api } from '../api';
 
 export default function AccountSetup() {
-    const [form, setForm] = useState({ fname: '', lname: '', username: '', password: '', confirmPassword: '' });
+    const [form, setForm] = useState({ fname: '', lname: '', username: '', password: '', confirmPassword: '', code: '' });
     const [email, setEmail] = useState('');
     const [error, setError] = useState('');
+    const [info, setInfo] = useState('');
+    const [codeSent, setCodeSent] = useState(false);
     const [ready, setReady] = useState(false);
 
     useEffect(() => {
@@ -37,9 +39,14 @@ export default function AccountSetup() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        setInfo('');
 
         if (form.password !== form.confirmPassword) {
             setError('Passwords do not match');
+            return;
+        }
+        if (form.password.length < 8) {
+            setError('Password must be at least 8 characters');
             return;
         }
 
@@ -49,11 +56,15 @@ export default function AccountSetup() {
                 fname: form.fname,
                 lname: form.lname,
                 user_name: form.username,
+                code: form.code,
             });
 
             if (res.data.success) {
                 localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));
                 window.location.href = '/';
+            } else if (res.data.needsCode) {
+                setCodeSent(true);
+                setInfo(res.data.message || `We emailed a 6-digit code to ${email}.`);
             } else {
                 const errors = res.data.errors || {};
                 if (errors.user_name) {
@@ -88,8 +99,28 @@ export default function AccountSetup() {
                         {error}
                     </div>
                 )}
+                {info && !error && (
+                    <div className="mt-4 rounded-lg border border-brand/30 bg-brand/5 px-3 py-2 text-sm text-gray-700 dark:bg-brand/10 dark:text-gray-200">
+                        {info}
+                    </div>
+                )}
 
                 <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+                    {codeSent && (
+                        <div>
+                            <label className="form-label">6-digit code</label>
+                            <input
+                                type="text"
+                                name="code"
+                                inputMode="numeric"
+                                maxLength={6}
+                                value={form.code}
+                                onChange={(e) => setForm({ ...form, code: e.target.value.replace(/\D/g, '') })}
+                                required
+                                className="form-input tracking-[0.4em]"
+                            />
+                        </div>
+                    )}
                     <div className="flex gap-3">
                         <div className="w-1/2">
                             <label className="form-label">First Name</label>
@@ -152,7 +183,7 @@ export default function AccountSetup() {
                     </div>
 
                     <button type="submit" className="btn-primary w-full py-2.5 text-base">
-                        Save and continue
+                        {codeSent ? 'Verify and save' : 'Save and continue'}
                     </button>
                 </form>
 

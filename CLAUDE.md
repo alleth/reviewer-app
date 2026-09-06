@@ -64,6 +64,7 @@ This is a **CakePHP 5.1** application (PHP 8.1+) running under XAMPP. It acts as
 | POST/PUT/PATCH `/api/account` | `UsersController` | `updateAccount` |
 | POST `/api/password/forgot` | `UsersController` | `forgotPassword` |
 | POST `/api/password/reset` | `UsersController` | `resetPassword` |
+| POST `/api/password/change` | `UsersController` | `changePassword` |
 | GET/POST `/api/topics` | `Api\TopicsController` | `index` / `add` |
 | GET/PUT/DELETE `/api/topics/:id` | `Api\TopicsController` | `view` / `edit` / `delete` |
 | GET/POST `/api/questions` | `Api\QuestionsController` | `index` / `add` |
@@ -94,7 +95,8 @@ Authentication is manual — no CakePHP Auth or Authentication plugin is used. A
 
 - **`login()`** — `password_verify()` against the stored `user_pass` hash, then `session()->write('Auth.User', $user)`. If the matched user has `user_pass === null` (a Google-only account), it returns `200` with `{ success: false, needsGoogleSetup: true, account: {...} }` so the SPA can prompt "continue with Google to finish setup" instead of showing a generic error.
 - **`googleLogin()`** — verifies a Google ID token (`credential` in the POST body) with `google/apiclient`'s `\Google_Client::verifyIdToken()`, using the `GOOGLE_CLIENT_ID` env var. User lookup order: by `google_id`, then by `email` (back-fills `google_id` on the existing row), then creates a new user with a de-duplicated `user_name` derived from the email local-part. On success writes `Auth.User` and returns `isNewUser` so the frontend can route brand-new sign-ups to account setup.
-- **`setupAccount()`** — for a logged-in Google-only account (`user_pass` is null): sets a password for the first time (and optionally touches up `fname`/`lname`/`user_name`). 409s if a password already exists — this is first-time setup, **not** a change-password flow. Rewrites `Auth.User` on success.
+- **`setupAccount()`** — for a logged-in Google-only account (`user_pass` is null): sets a password for the first time (and optionally touches up `fname`/`lname`/`user_name`). 409s if a password already exists. **Two-step**: the first call (no `code`) emails a `set_password` code and returns `{ needsCode: true }`; the second call must include it. Rewrites `Auth.User` on success.
+- **`changePassword()`** — `POST /api/password/change`, logged-in + AJAX-gated. Needs `current_password` + `new_password` (min 8). Rotates `session_token` (signs out other devices) but updates `Auth.token` on the current session so this device stays in, and emails a "password was changed" notice.
 - **`updateAccount()`** — `POST /api/account`, logged-in + AJAX-header gated. Patches `fname`/`lname`/`user_name`/`email` only (never `user_pass`), re-writes `Auth.User`. Backs the Settings page profile form.
 - **`session()`** — returns `{ loggedIn, user }` and sends `Cache-Control: no-store` / `Pragma: no-cache` so the SPA never gets a stale login state.
 - **`logout()`** — `session()->delete('Auth.User')` + `session()->renew()` (deliberately *not* `destroy()`, which caused issues in production).

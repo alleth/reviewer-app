@@ -16,6 +16,7 @@ return function (RouteBuilder $routes): void {
     $routes->connect('/api/account', ['controller' => 'Users', 'action' => 'updateAccount']);
     $routes->connect('/api/password/forgot', ['controller' => 'Users', 'action' => 'forgotPassword']);
     $routes->connect('/api/password/reset', ['controller' => 'Users', 'action' => 'resetPassword']);
+    $routes->connect('/api/password/change', ['controller' => 'Users', 'action' => 'changePassword']);
 
     // API resource routes (controllers in App\Controller\Api namespace)
     $routes->prefix('api', function (RouteBuilder $builder): void {

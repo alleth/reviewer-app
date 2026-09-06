@@ -39,6 +39,84 @@ function deviceLabel() {
     return `${browser} on ${os}`;
 }
 
+function ChangePasswordForm() {
+    const [open, setOpen] = useState(false);
+    const [cur, setCur] = useState('');
+    const [next, setNext] = useState('');
+    const [confirm, setConfirm] = useState('');
+    const [msg, setMsg] = useState(null); // { type, text }
+    const [busy, setBusy] = useState(false);
+
+    const submit = async (e) => {
+        e.preventDefault();
+        setMsg(null);
+        if (next !== confirm) {
+            setMsg({ type: 'err', text: 'New passwords do not match.' });
+            return;
+        }
+        if (next.length < 8) {
+            setMsg({ type: 'err', text: 'New password must be at least 8 characters.' });
+            return;
+        }
+        setBusy(true);
+        try {
+            const res = await api.post('/api/password/change', { current_password: cur, new_password: next });
+            if (res.data.success) {
+                setMsg({ type: 'ok', text: res.data.message || 'Password changed.' });
+                setCur(''); setNext(''); setConfirm(''); setOpen(false);
+            } else {
+                setMsg({ type: 'err', text: res.data.message || 'Could not change password.' });
+            }
+        } catch (err) {
+            setMsg({ type: 'err', text: err.response?.data?.message || 'Could not reach the server.' });
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className="mt-3">
+            {!open && (
+                <button type="button" className="btn-link" onClick={() => setOpen(true)}>
+                    Change password
+                </button>
+            )}
+            {msg && (
+                <p className={`mt-2 text-sm ${msg.type === 'ok' ? 'text-brand-dark dark:text-brand' : 'text-red-600 dark:text-red-400'}`}>
+                    {msg.text}
+                </p>
+            )}
+            {open && (
+                <form onSubmit={submit} className="mt-3 space-y-3">
+                    <div>
+                        <label className="form-label">Current password</label>
+                        <input type="password" value={cur} onChange={(e) => setCur(e.target.value)} required className="form-input" />
+                    </div>
+                    <div>
+                        <label className="form-label">New password</label>
+                        <input type="password" value={next} onChange={(e) => setNext(e.target.value)} required className="form-input" />
+                    </div>
+                    <div>
+                        <label className="form-label">Re-enter new password</label>
+                        <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required className="form-input" />
+                    </div>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                        Changing your password signs you out on every other device.
+                    </p>
+                    <div className="flex gap-2">
+                        <button type="submit" className="btn-primary" disabled={busy}>
+                            {busy ? 'Saving…' : 'Update password'}
+                        </button>
+                        <button type="button" className="btn-outline" onClick={() => { setOpen(false); setMsg(null); }}>
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            )}
+        </div>
+    );
+}
+
 function Section({ icon: Icon, title, desc, children }) {
     return (
         <section className="card p-5 sm:p-6">
@@ -146,12 +224,15 @@ export default function Settings() {
                 {/* Security */}
                 <Section icon={FaLock} title="Security" desc="A password is required to keep your account secure.">
                     {passwordSet ? (
-                        <div className="flex items-center gap-3 rounded-lg border border-brand/30 bg-brand/5 px-4 py-3 text-sm dark:bg-brand/10">
-                            <FaCircleCheck className="shrink-0 text-brand" />
-                            <span className="text-gray-700 dark:text-gray-200">
-                                Your account is complete — a password is set.
-                            </span>
-                        </div>
+                        <>
+                            <div className="flex items-center gap-3 rounded-lg border border-brand/30 bg-brand/5 px-4 py-3 text-sm dark:bg-brand/10">
+                                <FaCircleCheck className="shrink-0 text-brand" />
+                                <span className="text-gray-700 dark:text-gray-200">
+                                    Your account is complete — a password is set.
+                                </span>
+                            </div>
+                            <ChangePasswordForm />
+                        </>
                     ) : (
                         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30">
                             <span className="flex items-center gap-3 text-amber-800 dark:text-amber-300">
