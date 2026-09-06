@@ -1,17 +1,25 @@
 // src/components/Footer.js
 import React from 'react';
-import { FaFacebook, FaXTwitter, FaDiscord, FaYoutube } from 'react-icons/fa6';
+import { SOCIALS } from '../socials';
 
 const Footer = () => {
     return (
         <footer className="mt-auto bg-gray-100 py-4">
             <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
-                <span className="text-gray-500">CareerPass &copy; 2025</span>
+                <span className="text-gray-500">CareerPass &copy; {new Date().getFullYear()}</span>
                 <div className="flex gap-3 text-gray-600">
-                    <FaFacebook />
-                    <FaXTwitter />
-                    <FaDiscord />
-                    <FaYoutube />
+                    {SOCIALS.map(({ id, name, href, Icon }) => (
+                        <a
+                            key={id}
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={name}
+                            className="hover:text-brand"
+                        >
+                            <Icon />
+                        </a>
+                    ))}
                 </div>
             </div>
         </footer>

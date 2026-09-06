@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { FaFacebookF, FaXTwitter, FaDiscord, FaYoutube } from 'react-icons/fa6';
 import Modal from '../components/ui/Modal';
 import MobileMenu from '../components/ui/MobileMenu';
 import Logo from '../components/ui/Logo';
 import LoginPage from './LoginPage';
+import { SOCIALS } from '../socials';
 
 const newsColumns = [
     {
@@ -139,18 +139,18 @@ const LandingPage = () => {
                 <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 sm:flex-row sm:justify-between">
                     <small>&copy; {new Date().getFullYear()} CareerPass. All rights reserved.</small>
                     <div className="flex gap-4">
-                        <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-brand">
-                            <FaFacebookF size={18} />
-                        </a>
-                        <a href="https://x.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-brand">
-                            <FaXTwitter size={18} />
-                        </a>
-                        <a href="https://discord.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-brand">
-                            <FaDiscord size={18} />
-                        </a>
-                        <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-brand">
-                            <FaYoutube size={18} />
-                        </a>
+                        {SOCIALS.map(({ id, name, href, Icon }) => (
+                            <a
+                                key={id}
+                                href={href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label={name}
+                                className="text-gray-500 hover:text-brand"
+                            >
+                                <Icon size={18} />
+                            </a>
+                        ))}
                     </div>
                 </div>
             </footer>
