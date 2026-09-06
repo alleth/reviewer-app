@@ -12,10 +12,10 @@ const SignUp = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 pt-20">
+        <div className="min-h-screen bg-gray-50 pt-20 dark:bg-gray-900">
             <div className="mx-auto max-w-md px-4">
                 <form onSubmit={handleSubmit} className="card space-y-4 p-6">
-                    <h4 className="text-center text-lg font-bold text-gray-900">Create Your Account</h4>
+                    <h4 className="text-center text-lg font-bold text-gray-900 dark:text-gray-100">Create Your Account</h4>
 
                     <div>
                         <label className="form-label">Full Name</label>
@@ -39,22 +39,22 @@ const SignUp = () => {
 
                     <button type="submit" className="btn-primary w-full">Sign Up</button>
 
-                    <div className="flex items-center gap-3 text-center text-sm text-gray-400">
-                        <div className="h-px flex-1 bg-gray-200" />
+                    <div className="flex items-center gap-3 text-center text-sm text-gray-400 dark:text-gray-500">
+                        <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
                         or
-                        <div className="h-px flex-1 bg-gray-200" />
+                        <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
                     </div>
 
                     <button
                         type="button"
                         onClick={handleGoogleSignUp}
-                        className="btn-outline w-full border-gray-400 text-gray-500 transition-colors hover:bg-gray-500 hover:text-gray-50"
+                        className="btn-outline w-full border-gray-400 text-gray-500 transition-colors hover:bg-gray-500 hover:text-gray-50 dark:border-gray-500 dark:text-gray-400"
                     >
                         <FaGoogle className="mr-2" />
                         Continue with Google
                     </button>
 
-                    <div className="text-center text-sm text-gray-500">
+                    <div className="text-center text-sm text-gray-500 dark:text-gray-400">
                         I accept the CareerPass's{' '}
                         <a href="/termsofuse" className="text-brand">Terms of Use</a> and{' '}
                         <a href="/signup" className="text-brand">Privacy Notice</a>

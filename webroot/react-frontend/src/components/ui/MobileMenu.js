@@ -13,17 +13,17 @@ export default function MobileMenu({ show, onClose, title = 'Menu', children }) 
                 onClick={onClose}
             />
             <div
-                className={`fixed right-0 top-0 z-50 h-full w-72 max-w-[85vw] transform bg-white p-5 shadow-xl transition-transform duration-200 ${
+                className={`fixed right-0 top-0 z-50 h-full w-72 max-w-[85vw] transform bg-white p-5 shadow-xl transition-transform duration-200 dark:bg-gray-800 ${
                     show ? 'translate-x-0' : 'translate-x-full'
                 }`}
             >
                 <div className="mb-4 flex items-center justify-between">
-                    <span className="text-base font-semibold text-gray-900">{title}</span>
+                    <span className="text-base font-semibold text-gray-900 dark:text-gray-100">{title}</span>
                     <button
                         type="button"
                         onClick={onClose}
                         aria-label="Close menu"
-                        className="text-2xl leading-none text-gray-400 hover:text-gray-600"
+                        className="text-2xl leading-none text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
                     >
                         &times;
                     </button>

@@ -70,7 +70,7 @@ const SignInModal = () => {
 
             {/* Sign In Modal */}
             <Modal show={showLogin} onClose={handleLoginClose}>
-                <h4 className="mb-4 text-lg font-bold text-gray-900">Sign In</h4>
+                <h4 className="mb-4 text-lg font-bold text-gray-900 dark:text-gray-100">Sign In</h4>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
                         <label className="form-label">Username</label>
@@ -100,17 +100,17 @@ const SignInModal = () => {
                         <button type="button" onClick={handleForgotShow} className="btn-link underline">
                             Forgot password?
                         </button>
-                        <span className="text-sm text-gray-500">
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
                             No account? <a href="#signup" className="text-brand">Sign up</a>
                         </span>
                     </div>
 
                     <button type="submit" className="btn-primary w-full">Log In</button>
 
-                    <div className="flex items-center gap-3 text-center text-sm text-gray-400">
-                        <div className="h-px flex-1 bg-gray-200" />
+                    <div className="flex items-center gap-3 text-center text-sm text-gray-400 dark:text-gray-500">
+                        <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
                         or
-                        <div className="h-px flex-1 bg-gray-200" />
+                        <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
                     </div>
 
                     <div className="flex justify-center">
@@ -125,7 +125,7 @@ const SignInModal = () => {
 
             {/* Forgot Password Modal */}
             <Modal show={showForgotPassword} onClose={handleForgotClose}>
-                <h4 className="mb-4 text-lg font-bold text-gray-900">Reset Password</h4>
+                <h4 className="mb-4 text-lg font-bold text-gray-900 dark:text-gray-100">Reset Password</h4>
                 <form onSubmit={handleForgotSubmit} className="space-y-4">
                     <div>
                         <label className="form-label">We'll send reset instructions to:</label>

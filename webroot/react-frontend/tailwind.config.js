@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
     content: ['./src/**/*.{js,jsx,ts,tsx}', './public/index.html'],
+    darkMode: 'class',
     theme: {
         extend: {
             colors: {
@@ -15,8 +16,15 @@ module.exports = {
             },
             fontFamily: {
                 sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+                // Hand-drawn annotation font (see <HandNote>), loaded in public/index.html
+                hand: ['Caveat', 'ui-sans-serif', 'cursive'],
             },
             keyframes: {
+                pop: {
+                    '0%': { transform: 'scale(0.96)' },
+                    '55%': { transform: 'scale(1.03)' },
+                    '100%': { transform: 'scale(1)' },
+                },
                 drift1: {
                     '0%, 100%': { transform: 'translate(0, 0)' },
                     '25%': { transform: 'translate(100px, 150px)' },
@@ -31,6 +39,7 @@ module.exports = {
                 },
             },
             animation: {
+                pop: 'pop 0.35s ease-out',
                 drift1: 'drift1 20s ease-in-out infinite alternate',
                 drift2: 'drift2 25s ease-in-out infinite alternate',
             },

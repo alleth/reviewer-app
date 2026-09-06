@@ -6,6 +6,7 @@ import axios from 'axios';
 import Dashboard from './pages/Dashboard';
 import AccountSetup from './pages/AccountSetup';
 import App from './App'; // <- Guest route handler
+import './theme'; // initialise theme store (applies the `dark` class on load)
 import './index.css';
 import API_URL from './api';
 
@@ -34,7 +35,7 @@ function AppWrapper() {
 
     if (isLoggedIn === null) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-gray-50 text-sm text-gray-500">
+            <div className="flex min-h-screen items-center justify-center bg-gray-50 text-sm text-gray-500 dark:bg-gray-900 dark:text-gray-400">
                 Loading...
             </div>
         );

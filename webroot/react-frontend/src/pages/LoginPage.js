@@ -130,17 +130,17 @@ function LoginPage({ mode = 'login', onClose }) {
                     size={56}
                     className="mx-auto"
                 />
-                <h4 className="mt-4 text-lg font-bold text-gray-900">
+                <h4 className="mt-4 text-lg font-bold text-gray-900 dark:text-gray-100">
                     {[pendingAccount.fname, pendingAccount.lname].filter(Boolean).join(' ') || pendingAccount.email}
                 </h4>
-                <p className="text-sm text-gray-500">{pendingAccount.email}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{pendingAccount.email}</p>
 
-                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300">
                     For your security, this account needs a one-time setup. Continue with Google to finish it.
                 </div>
 
                 {error && (
-                    <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
                         {error}
                     </div>
                 )}
@@ -151,7 +151,7 @@ function LoginPage({ mode = 'login', onClose }) {
 
                 <button
                     type="button"
-                    className="btn-link mt-4 w-full text-center text-gray-500"
+                    className="btn-link mt-4 w-full text-center text-gray-500 dark:text-gray-400"
                     onClick={() => { setPendingAccount(null); setError(''); }}
                 >
                     Use a different account
@@ -162,12 +162,12 @@ function LoginPage({ mode = 'login', onClose }) {
 
     return (
         <div className="p-2">
-            <h4 className="mb-4 text-center text-xl font-bold text-gray-900">
+            <h4 className="mb-4 text-center text-xl font-bold text-gray-900 dark:text-gray-100">
                 {mode === 'signup' ? 'Create an Account' : 'Welcome Back'}
             </h4>
 
             {error && (
-                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
                     {error}
                 </div>
             )}
@@ -271,10 +271,10 @@ function LoginPage({ mode = 'login', onClose }) {
                 </button>
             </form>
 
-            <div className="my-4 flex items-center gap-3 text-xs text-gray-400">
-                <div className="h-px flex-1 bg-gray-200" />
+            <div className="my-4 flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500">
+                <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
                 OR
-                <div className="h-px flex-1 bg-gray-200" />
+                <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
             </div>
 
             <div className="flex justify-center">
@@ -287,7 +287,7 @@ function LoginPage({ mode = 'login', onClose }) {
             </div>
 
             {mode === 'signup' && (
-                <div className="mt-4 text-center text-xs text-gray-500">
+                <div className="mt-4 text-center text-xs text-gray-500 dark:text-gray-400">
                     By signing up, you agree to our{' '}
                     <a href="/terms" className="text-brand hover:text-brand-dark">Terms Policy</a> and{' '}
                     <a href="/privacy" className="text-brand hover:text-brand-dark">Privacy Notice</a>.
@@ -295,7 +295,7 @@ function LoginPage({ mode = 'login', onClose }) {
             )}
 
             {onClose && (
-                <button type="button" className="btn-link mt-4 w-full text-center text-gray-500" onClick={onClose}>
+                <button type="button" className="btn-link mt-4 w-full text-center text-gray-500 dark:text-gray-400" onClick={onClose}>
                     Cancel
                 </button>
             )}

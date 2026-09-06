@@ -3,6 +3,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import Modal from '../components/ui/Modal';
 import MobileMenu from '../components/ui/MobileMenu';
 import Logo from '../components/ui/Logo';
+import ThemeToggle from '../components/ui/ThemeToggle';
 import LoginPage from './LoginPage';
 import { SOCIALS } from '../socials';
 
@@ -65,7 +66,7 @@ const LandingPage = () => {
             </div>
 
             {/* Glass Overlay */}
-            <div className="absolute inset-0 z-[1] bg-gray-50/70 backdrop-blur-2xl" />
+            <div className="absolute inset-0 z-[1] bg-gray-50/70 backdrop-blur-2xl dark:bg-gray-900/70" />
 
             {/* Page Content */}
             <div className="relative z-[2] flex-1">
@@ -77,12 +78,15 @@ const LandingPage = () => {
                             CareerPass
                         </span>
                     </Link>
-                    <div className="hidden gap-2 sm:mr-6 md:flex">
-                        <button className="btn-outline" onClick={() => openModal('login')}>Sign In</button>
-                        <button className="btn-primary" onClick={() => openModal('signup')}>Sign Up</button>
-                    </div>
-                    <div className="md:hidden">
-                        <button className="btn-outline" onClick={() => setShowMenu(true)} aria-label="Open menu">☰</button>
+                    <div className="flex items-center gap-2 sm:mr-6">
+                        <ThemeToggle />
+                        <div className="hidden gap-2 md:flex">
+                            <button className="btn-outline" onClick={() => openModal('login')}>Sign In</button>
+                            <button className="btn-primary" onClick={() => openModal('signup')}>Sign Up</button>
+                        </div>
+                        <div className="md:hidden">
+                            <button className="btn-outline" onClick={() => setShowMenu(true)} aria-label="Open menu">☰</button>
+                        </div>
                     </div>
                 </div>
 
@@ -95,12 +99,12 @@ const LandingPage = () => {
 
                 {/* Hero Section */}
                 <div className="mx-auto max-w-3xl px-4 py-16 text-center">
-                    <h1 className="text-4xl font-bold leading-tight text-gray-900 sm:text-5xl">
+                    <h1 className="text-4xl font-bold leading-tight text-gray-900 sm:text-5xl dark:text-gray-100">
                         Pass the Civil Service<br /> Exam with confidence.
                     </h1>
-                    <p className="mt-4 text-gray-500">Unleash Your Potential with Our Tools, Anytime, Anywhere</p>
+                    <p className="mt-4 text-gray-500 dark:text-gray-400">Unleash Your Potential with Our Tools, Anytime, Anywhere</p>
                     <div className="mt-6 flex justify-center gap-3">
-                        <button className="btn-primary px-6">Test Yourself</button>
+                        <button className="btn-primary px-6" onClick={() => navigate('/pricing')}>Get Started</button>
                         <button className="btn-outline px-6" onClick={() => navigate('/explore')}>Explore</button>
                     </div>
                 </div>
@@ -110,13 +114,13 @@ const LandingPage = () => {
                     <div className="grid grid-cols-1 gap-8 text-center sm:grid-cols-2 lg:grid-cols-4">
                         {newsColumns.map((col) => (
                             <div key={col.title}>
-                                <h5 className="mb-2 font-semibold text-gray-900">{col.title}</h5>
-                                <ul className="divide-y divide-gray-200 text-left">
+                                <h5 className="mb-2 font-semibold text-gray-900 dark:text-gray-100">{col.title}</h5>
+                                <ul className="divide-y divide-gray-200 text-left dark:divide-gray-700">
                                     {col.items.map((item) => (
                                         <li key={item.id}>
                                             <a
                                                 href={`#${item.id}`}
-                                                className="block py-2 text-sm text-gray-600 hover:text-brand"
+                                                className="block py-2 text-sm text-gray-600 hover:text-brand dark:text-gray-300"
                                             >
                                                 {item.label}
                                             </a>
@@ -135,7 +139,7 @@ const LandingPage = () => {
             </Modal>
 
             {/* Footer */}
-            <footer className="relative z-[2] border-t border-gray-200 bg-gray-50 py-6 text-center text-gray-500">
+            <footer className="relative z-[2] border-t border-gray-200 bg-gray-50 py-6 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
                 <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 sm:flex-row sm:justify-between">
                     <small>&copy; {new Date().getFullYear()} CareerPass. All rights reserved.</small>
                     <div className="flex gap-4">
@@ -146,7 +150,7 @@ const LandingPage = () => {
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 aria-label={name}
-                                className="text-gray-500 hover:text-brand"
+                                className="text-gray-500 hover:text-brand dark:text-gray-400"
                             >
                                 <Icon size={18} />
                             </a>

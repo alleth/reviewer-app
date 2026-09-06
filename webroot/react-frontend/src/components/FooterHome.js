@@ -2,7 +2,7 @@ import React from 'react';
 
 const FooterHome = () => {
     return (
-        <footer className="fixed bottom-0 left-0 w-full bg-gray-50 p-4 text-center text-gray-500 shadow-[0_-1px_0_rgba(0,0,0,0.1)]">
+        <footer className="fixed bottom-0 left-0 w-full bg-gray-50 p-4 text-center text-gray-500 shadow-[0_-1px_0_rgba(0,0,0,0.1)] dark:bg-gray-900 dark:text-gray-400 dark:shadow-[0_-1px_0_rgba(255,255,255,0.1)]">
             © {new Date().getFullYear()} CareerPass. All rights reserved.
         </footer>
     );

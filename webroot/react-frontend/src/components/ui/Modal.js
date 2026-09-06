@@ -22,7 +22,7 @@ export default function Modal({ show, onClose, children, className = '' }) {
             onClick={onClose}
         >
             <div
-                className={`w-full max-w-md rounded-2xl bg-white p-6 shadow-xl ${className}`}
+                className={`w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800 ${className}`}
                 onClick={(e) => e.stopPropagation()}
             >
                 {children}

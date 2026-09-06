@@ -4,7 +4,7 @@
 
 @layer base {
   body {
-    @apply bg-gray-50 font-sans text-gray-900 antialiased;
+    @apply bg-gray-50 font-sans text-gray-900 antialiased dark:bg-gray-900 dark:text-gray-100;
   }
 }
 
@@ -18,19 +18,21 @@
     @apply btn bg-brand text-white hover:bg-brand-dark;
   }
   .btn-outline {
-    @apply btn border border-gray-300 text-gray-700 hover:bg-gray-100;
+    @apply btn border border-gray-300 text-gray-700 hover:bg-gray-100
+      dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800;
   }
   .btn-link {
     @apply bg-transparent p-0 text-sm font-medium text-brand hover:text-brand-dark;
   }
   .form-label {
-    @apply mb-1.5 block text-sm font-medium text-gray-600;
+    @apply mb-1.5 block text-sm font-medium text-gray-600 dark:text-gray-300;
   }
   .form-input {
     @apply w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900
-      placeholder-gray-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20;
+      placeholder-gray-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20
+      dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500;
   }
   .card {
-    @apply rounded-xl border border-gray-200 bg-white shadow-sm;
+    @apply rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800;
   }
 }
