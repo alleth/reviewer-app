@@ -14,11 +14,74 @@ class UsersController extends AppController
     private const CODE_TTL_MINUTES = 10;
     private const CODE_MAX_ATTEMPTS = 5;
 
+    /** Distinct devices within 60s that trips the login-challenge guard. */
+    private const DEVICE_SWITCH_LIMIT = 4;
+
+    /** A hash that stays stable per browser/device (used by the guard). */
+    private function deviceHash(): string
+    {
+        return hash('sha256', (string)$this->request->getHeaderLine('User-Agent'));
+    }
+
+    private function recordLoginEvent(int $userId): void
+    {
+        $events = $this->fetchTable('LoginEvents');
+        $events->save($events->newEntity([
+            'user_id' => $userId,
+            'device_hash' => $this->deviceHash(),
+            'created' => new DateTime(),
+        ]));
+    }
+
     /**
-     * Emails a one-time code. When no mail transport is configured
-     * (EMAIL_TRANSPORT_DEFAULT_URL unset) the code is written to the error log
-     * instead, so the flow is testable before SMTP is wired up.
+     * The rapid device-switch guard. Returns a challenge response array (to send
+     * instead of logging in) when this account has been accessed from too many
+     * devices in the last minute or already has a pending challenge; returns
+     * null when the login may proceed. A correct `$code` clears the guard.
+     *
+     * @return array<string, mixed>|null
      */
+    private function loginChallenge(int $userId, string $email, string $code): ?array
+    {
+        $events = $this->fetchTable('LoginEvents');
+        $recentDevices = $events->find()
+            ->where(['user_id' => $userId, 'created >=' => (new DateTime())->modify('-60 seconds')])
+            ->distinct(['device_hash'])
+            ->count();
+
+        $codes = $this->fetchTable('AuthCodes');
+        $pending = $codes->find()
+            ->where(['user_id' => $userId, 'purpose' => 'login_challenge', 'expires >' => new DateTime()])
+            ->first();
+
+        if ($recentDevices < self::DEVICE_SWITCH_LIMIT && $pending === null) {
+            return null;
+        }
+
+        if ($code !== '' && $this->consumeCode($userId, 'login_challenge', $code)) {
+            $events->deleteAll(['user_id' => $userId]);
+
+            return null;
+        }
+
+        if ($code === '' && !$pending) {
+            $this->sendAuthCode(
+                $email,
+                $this->issueCode($userId, 'login_challenge'),
+                'Your CareerPass account was accessed from several devices very quickly, '
+                . 'so we need to confirm this sign-in.',
+            );
+        }
+
+        return [
+            'success' => false,
+            'needsCode' => true,
+            'message' => $code !== ''
+                ? 'That code is wrong or has expired.'
+                : 'For your security, enter the 6-digit code we just emailed you.',
+        ];
+    }
+
     /**
      * Sends one email. When no transport is configured
      * (EMAIL_TRANSPORT_DEFAULT_URL unset) the message is written to the error
@@ -218,8 +281,18 @@ class UsersController extends AppController
                 ->first();
 
             if ($user && $user->user_pass !== null && password_verify($password, $user->user_pass)) {
-                $this->startSession($user);
-                $response = ['success' => true, 'user' => $user];
+                $challenge = $this->loginChallenge(
+                    (int)$user->user_id,
+                    (string)$user->email,
+                    trim((string)($data['code'] ?? '')),
+                );
+                if ($challenge !== null) {
+                    $response = $challenge;
+                } else {
+                    $this->recordLoginEvent((int)$user->user_id);
+                    $this->startSession($user);
+                    $response = ['success' => true, 'user' => $user];
+                }
             } elseif ($user && $user->user_pass === null) {
                 // Google-only account: no password was ever set for it. Give the frontend
                 // enough to render a personalized "continue with Google to finish setup"
@@ -329,6 +402,8 @@ class UsersController extends AppController
             }
 
             $this->startSession($user);
+            // Google sign-ins are never challenged, but still count toward the guard.
+            $this->recordLoginEvent((int)$user->user_id);
 
             return $this->response
                 ->withType('application/json')

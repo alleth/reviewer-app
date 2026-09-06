@@ -6,6 +6,9 @@ import { api } from '../api';
 
 function LoginPage({ mode = 'login', onClose }) {
     const [recovering, setRecovering] = useState(false);
+    // Set when login() asks for an emailed code (rapid device-switch guard).
+    const [loginChallenge, setLoginChallenge] = useState(false);
+    const [loginCode, setLoginCode] = useState('');
     const [formData, setFormData] = useState({
         fname: '',
         lname: '',
@@ -28,7 +31,8 @@ function LoginPage({ mode = 'login', onClose }) {
         try {
             const res = await api.post('/api/login', {
                 user_name: formData.username,
-                user_pass: formData.password
+                user_pass: formData.password,
+                code: loginCode,
             });
 
             if (res.data.success) {
@@ -37,6 +41,9 @@ function LoginPage({ mode = 'login', onClose }) {
             } else if (res.data.needsGoogleSetup) {
                 setPendingAccount(res.data.account);
                 setError('');
+            } else if (res.data.needsCode) {
+                setLoginChallenge(true);
+                setError(res.data.message || 'Enter the code we emailed you.');
             } else {
                 setError(res.data.message || 'Invalid credentials');
             }
@@ -265,6 +272,22 @@ function LoginPage({ mode = 'login', onClose }) {
                     </div>
                 )}
 
+                {mode === 'login' && loginChallenge && (
+                    <div>
+                        <label className="form-label">6-digit code</label>
+                        <input
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={6}
+                            value={loginCode}
+                            onChange={(e) => setLoginCode(e.target.value.replace(/\D/g, ''))}
+                            required
+                            className="form-input tracking-[0.4em]"
+                            autoFocus
+                        />
+                    </div>
+                )}
+
                 {mode === 'login' && (
                     <div className="text-right">
                         <button
@@ -278,7 +301,7 @@ function LoginPage({ mode = 'login', onClose }) {
                 )}
 
                 <button type="submit" className="btn-primary w-full py-2.5 text-base">
-                    {mode === 'signup' ? 'Sign Up' : 'Login'}
+                    {mode === 'signup' ? 'Sign Up' : (loginChallenge ? 'Verify & sign in' : 'Login')}
                 </button>
             </form>
 
