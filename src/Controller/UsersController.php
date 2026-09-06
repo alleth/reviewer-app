@@ -4,9 +4,104 @@ namespace App\Controller;
 
 use App\Model\Entity\User;
 use Cake\Http\Response;
+use Cake\I18n\DateTime;
+use Cake\Log\Log;
+use Cake\Mailer\Mailer;
 
 class UsersController extends AppController
 {
+    /** How long an emailed code stays valid, and how many guesses it allows. */
+    private const CODE_TTL_MINUTES = 10;
+    private const CODE_MAX_ATTEMPTS = 5;
+
+    /**
+     * Emails a one-time code. When no mail transport is configured
+     * (EMAIL_TRANSPORT_DEFAULT_URL unset) the code is written to the error log
+     * instead, so the flow is testable before SMTP is wired up.
+     */
+    private function sendAuthCode(string $email, string $code, string $intro): void
+    {
+        $body = "$intro\n\nYour code is: $code\n\n"
+            . 'It expires in ' . self::CODE_TTL_MINUTES . ' minutes. '
+            . "If you didn't request this, you can ignore this email.";
+
+        if (empty(env('EMAIL_TRANSPORT_DEFAULT_URL'))) {
+            Log::warning("[auth-code] no mailer configured - code for $email: $code");
+
+            return;
+        }
+
+        try {
+            (new Mailer('default'))
+                ->setFrom(env('EMAIL_FROM', 'CareerPass <no-reply@careerpass.local>'))
+                ->setTo($email)
+                ->setSubject('Your CareerPass verification code')
+                ->deliver($body);
+        } catch (\Exception $e) {
+            Log::error("[auth-code] send failed for $email: {$e->getMessage()} — code: $code");
+        }
+    }
+
+    /**
+     * Generates a fresh 6-digit code for ($userId, $purpose), replacing any
+     * earlier one, and returns the plaintext to email.
+     */
+    private function issueCode(int $userId, string $purpose): string
+    {
+        $codes = $this->fetchTable('AuthCodes');
+        $codes->deleteAll(['user_id' => $userId, 'purpose' => $purpose]);
+
+        $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $codes->save($codes->newEntity([
+            'user_id' => $userId,
+            'purpose' => $purpose,
+            'code_hash' => password_hash($code, PASSWORD_DEFAULT),
+            'expires' => (new DateTime())->modify('+' . self::CODE_TTL_MINUTES . ' minutes'),
+            'attempts' => 0,
+            'created' => new DateTime(),
+        ]));
+
+        return $code;
+    }
+
+    /**
+     * Checks a submitted code for ($userId, $purpose). Consumes (deletes) the
+     * row on success; counts the attempt and deletes once exhausted on failure.
+     */
+    private function consumeCode(int $userId, string $purpose, string $code): bool
+    {
+        $codes = $this->fetchTable('AuthCodes');
+        $row = $codes->find()
+            ->where(['user_id' => $userId, 'purpose' => $purpose])
+            ->orderBy(['auth_code_id' => 'DESC'])
+            ->first();
+
+        if (!$row) {
+            return false;
+        }
+
+        if ($row->expires->isPast() || $row->attempts >= self::CODE_MAX_ATTEMPTS) {
+            $codes->delete($row);
+
+            return false;
+        }
+
+        if (!password_verify($code, $row->code_hash)) {
+            $row->attempts += 1;
+            if ($row->attempts >= self::CODE_MAX_ATTEMPTS) {
+                $codes->delete($row);
+            } else {
+                $codes->save($row);
+            }
+
+            return false;
+        }
+
+        $codes->delete($row);
+
+        return true;
+    }
+
     /**
      * Lightweight CSRF gate for the state-changing auth actions. This app has no CSRF
      * middleware (removed entirely so the cross-origin SPA can POST at all) and session
@@ -437,5 +532,92 @@ class UsersController extends AppController
         return $this->response
             ->withType('application/json')
             ->withStringBody(json_encode($response));
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     */
+    private function json(array $body, int $status = 200): Response
+    {
+        return $this->response
+            ->withStatus($status)
+            ->withType('application/json')
+            ->withStringBody(json_encode($body));
+    }
+
+    /**
+     * Step 1 of password recovery: emails a code to the address if it belongs to
+     * an account. Always reports success so the endpoint can't be used to probe
+     * which emails are registered.
+     */
+    public function forgotPassword(): Response
+    {
+        $this->request->allowMethod(['post']);
+        if ($blocked = $this->requireAjaxHeader()) {
+            return $blocked;
+        }
+
+        $email = trim((string)$this->request->getData('email'));
+        $user = $email !== ''
+            ? $this->Users->find()->where(['email' => $email])->first()
+            : null;
+
+        if ($user) {
+            $code = $this->issueCode((int)$user->user_id, 'password_reset');
+            $this->sendAuthCode(
+                $user->email,
+                $code,
+                'We got a request to reset your CareerPass password.',
+            );
+        }
+
+        return $this->json([
+            'success' => true,
+            'message' => 'If that email has an account, a reset code is on its way.',
+        ]);
+    }
+
+    /**
+     * Step 2 of password recovery: verifies the emailed code and sets the new
+     * password. Rotating session_token signs out every existing session.
+     */
+    public function resetPassword(): Response
+    {
+        $this->request->allowMethod(['post']);
+        if ($blocked = $this->requireAjaxHeader()) {
+            return $blocked;
+        }
+
+        $data = $this->request->getData();
+        $email = trim((string)($data['email'] ?? ''));
+        $code = trim((string)($data['code'] ?? ''));
+        $password = (string)($data['password'] ?? '');
+
+        if (strlen($password) < 8) {
+            return $this->json(
+                ['success' => false, 'message' => 'Password must be at least 8 characters.'],
+                422,
+            );
+        }
+
+        $user = $email !== ''
+            ? $this->Users->find()->where(['email' => $email])->first()
+            : null;
+
+        if (!$user || !$this->consumeCode((int)$user->user_id, 'password_reset', $code)) {
+            return $this->json(
+                ['success' => false, 'message' => 'That code is wrong or has expired. Request a new one.'],
+                400,
+            );
+        }
+
+        $user->user_pass = password_hash($password, PASSWORD_DEFAULT);
+        $user->session_token = bin2hex(random_bytes(20));
+        $this->Users->save($user);
+
+        return $this->json([
+            'success' => true,
+            'message' => 'Password updated. You can sign in now.',
+        ]);
     }
 }

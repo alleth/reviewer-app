@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
 import InitialsAvatar from '../components/ui/InitialsAvatar';
+import PasswordRecovery from '../components/PasswordRecovery';
 import { api } from '../api';
 
 function LoginPage({ mode = 'login', onClose }) {
+    const [recovering, setRecovering] = useState(false);
     const [formData, setFormData] = useState({
         fname: '',
         lname: '',
@@ -119,6 +121,15 @@ function LoginPage({ mode = 'login', onClose }) {
             setError('Google sign-in failed. Please try again.');
         }
     };
+
+    if (recovering) {
+        return (
+            <PasswordRecovery
+                initialEmail={formData.username.includes('@') ? formData.username : ''}
+                onBackToLogin={() => setRecovering(false)}
+            />
+        );
+    }
 
     if (pendingAccount) {
         return (
@@ -259,7 +270,7 @@ function LoginPage({ mode = 'login', onClose }) {
                         <button
                             type="button"
                             className="btn-link"
-                            onClick={() => alert('Redirect to password recovery')}
+                            onClick={() => setRecovering(true)}
                         >
                             Forgot Password?
                         </button>

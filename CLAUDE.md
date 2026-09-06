@@ -62,6 +62,8 @@ This is a **CakePHP 5.1** application (PHP 8.1+) running under XAMPP. It acts as
 | POST `/api/google-login` | `UsersController` | `googleLogin` |
 | POST `/api/account/setup` | `UsersController` | `setupAccount` |
 | POST/PUT/PATCH `/api/account` | `UsersController` | `updateAccount` |
+| POST `/api/password/forgot` | `UsersController` | `forgotPassword` |
+| POST `/api/password/reset` | `UsersController` | `resetPassword` |
 | GET/POST `/api/topics` | `Api\TopicsController` | `index` / `add` |
 | GET/PUT/DELETE `/api/topics/:id` | `Api\TopicsController` | `view` / `edit` / `delete` |
 | GET/POST `/api/questions` | `Api\QuestionsController` | `index` / `add` |
@@ -99,6 +101,8 @@ Authentication is manual — no CakePHP Auth or Authentication plugin is used. A
 
 The serialized `user` object **omits `user_pass` and `session_token`** (`$_hidden` on the `User` entity — `user_pass` used to leak the bcrypt hash into every response and into `localStorage`) and adds a virtual **`password_set`** boolean the Settings/AccountSetup UI uses to show account-completion state.
 
+**Email + one-time codes.** `sendAuthCode()` sends via CakePHP's `Mailer` when `EMAIL_TRANSPORT_DEFAULT_URL` is a real SMTP DSN (and `EMAIL_FROM` for the sender); with neither set it **logs the code to `logs/error.log`** instead, so the flows work end-to-end before SMTP is wired. `issueCode()` / `consumeCode()` manage the `auth_codes` rows (6-digit, 10-min TTL, 5 attempts). **Forgot-password** is `POST /api/password/forgot` (always 200, never reveals whether the email exists) → emailed code → `POST /api/password/reset` (`email` + `code` + `password`), which sets the new hash and rotates `session_token` so every existing session is signed out.
+
 **Single-device sessions.** `login()` and `googleLogin()` go through `startSession()`, which rotates `users.session_token` to a fresh random value and stores it in the PHP session as `Auth.token`. `activeUserId()` (used by `session()`, `setupAccount()`, `updateAccount()`) re-reads `session_token` from the DB on every call and returns null — clearing the stale session — when it no longer matches `Auth.token`, i.e. the account has since logged in elsewhere. `session()` then returns `{ loggedIn: false, reason: 'signed_in_elsewhere' }`; the SPA (`index.js`) also re-checks on tab focus/visibility so a superseded device signs out promptly, and shows a banner on the landing page. Sessions predating the column (`session_token` null on both sides) are grandfathered until their next login.
 
 **Frontend auth state lives in `localStorage`** (key `skillsprint_user` — unchanged despite the SkillSprint→CareerPass rebrand; renaming it would silently log everyone out), not cookies — cross-origin session cookies between Cloudflare Pages and Railway were unreliable. `index.js` gates on the localStorage entry first, then confirms against `/api/session` with `withCredentials: true`. The React route `/account-setup` (`src/pages/AccountSetup.js`) is reachable regardless of login state and self-redirects to `/` when there's no stored user.
@@ -112,11 +116,18 @@ All tables use non-standard primary keys (not `id`):
 - **`questions`** — PK: `question_id`. Fields: `topic_id` (FK → topics, CASCADE delete), `question_text`, `difficulty` (1=easy/2=medium/3=hard, constants on `QuestionsTable`), `explanation`. `belongsTo` Topics, `hasMany` Choices (sorted by `sort_order ASC`).
 - **`choices`** — PK: `choice_id`. Fields: `question_id` (FK → questions, CASCADE delete), `choice_text`, `is_correct` (boolean), `sort_order`. `belongsTo` Questions.
 
-The migration for topics/questions/choices is `config/Migrations/20260529000000_CreateTopicsQuestionsChoices.php`.
+- **`auth_codes`** — PK: `auth_code_id`. Fields: `user_id` (FK → users, CASCADE), `purpose` (`'password_reset'`, …), `code_hash` (bcrypt of the 6-digit code, `$_hidden`), `expires`, `attempts`. One-time emailed codes; a row is deleted on use, expiry or after 5 bad guesses. `AuthCodesTable` / `AuthCode` entity.
+- **`login_events`** — PK: `login_event_id`. Fields: `user_id` (FK → users, CASCADE), `device_hash`, `created`. For the (not-yet-built) rapid-device-switch guard.
+
+Migrations: topics/questions/choices in `20260529000000_CreateTopicsQuestionsChoices.php`; `auth_codes` + `login_events` in `20260907000000_CreateAuthCodes.php`. **`docker-start.sh` does not run migrations**, so on Railway apply new tables/columns by hand:
+```sql
+CREATE TABLE auth_codes (auth_code_id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id INT UNSIGNED NOT NULL, purpose VARCHAR(30) NOT NULL, code_hash VARCHAR(255) NOT NULL, expires DATETIME NOT NULL, attempts INT NOT NULL DEFAULT 0, created DATETIME NULL, INDEX (user_id, purpose), FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE);
+CREATE TABLE login_events (login_event_id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id INT UNSIGNED NOT NULL, device_hash VARCHAR(64) NOT NULL, created DATETIME NULL, INDEX (user_id, created), FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE);
+```
 
 ### Configuration
 
-- Backend env: `config/.env` (copy from `config/.env.example`). Key vars: `FRONTEND_URL`, `SECURITY_SALT`, `DATABASE_URL`, `GOOGLE_CLIENT_ID` (read by `googleLogin()`; **not** listed in `.env.example` — add it manually, and set it on Railway).
+- Backend env: `config/.env` (copy from `config/.env.example`). Key vars: `FRONTEND_URL`, `SECURITY_SALT`, `DATABASE_URL`, `GOOGLE_CLIENT_ID` (read by `googleLogin()`; **not** listed in `.env.example` — add it manually, and set it on Railway). Email is optional: `EMAIL_TRANSPORT_DEFAULT_URL` (an SMTP DSN like `smtp://user:pass@host:587`) + `EMAIL_FROM`; without them, `sendAuthCode()` logs codes to `logs/error.log` instead of sending.
 - `config/app_local.php` (not committed — copy from `config/app_local.example.php`) sets the database connection under `Datasources.default`.
 - Frontend env: `webroot/react-frontend/.env` (copy from `.env.example`). Key vars: `REACT_APP_API_URL` (defaults to `http://localhost/reviewer_app` in `src/api.js`) and `REACT_APP_GOOGLE_CLIENT_ID` (must match the backend's `GOOGLE_CLIENT_ID`; set it on Cloudflare Pages).
 - Test suite defaults to SQLite (`sqlite://127.0.0.1/tmp/tests.sqlite`, set in `config/app_local.php`) unless `DATABASE_TEST_URL` overrides it.
