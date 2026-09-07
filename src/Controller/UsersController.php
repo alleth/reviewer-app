@@ -2,11 +2,14 @@
 
 namespace App\Controller;
 
+use App\Mailer\Transport\BrevoTransport;
 use App\Model\Entity\User;
 use Cake\Http\Response;
 use Cake\I18n\DateTime;
 use Cake\Log\Log;
-use Cake\Mailer\Mailer;
+use Cake\Mailer\Message;
+use Cake\Mailer\Transport\SmtpTransport;
+use Cake\Mailer\TransportFactory;
 
 class UsersController extends AppController
 {
@@ -83,32 +86,36 @@ class UsersController extends AppController
     }
 
     /**
-     * Sends one email. When no transport is configured (neither BREVO_API_KEY
-     * nor EMAIL_TRANSPORT_DEFAULT_URL set) the message is written to the error
-     * log instead, so email-dependent flows stay testable before mail is wired.
+     * Sends one email. Picks the transport straight from the environment rather
+     * than the Mailer config so there's no config-wiring in the path: Brevo's
+     * HTTP API when BREVO_API_KEY is set (Railway blocks outbound SMTP), else an
+     * SMTP DSN in EMAIL_TRANSPORT_DEFAULT_URL. With neither, the message is
+     * written to the log so email-dependent flows stay testable before mail is
+     * wired.
      */
     private function sendMail(string $email, string $subject, string $body): void
     {
-        if (empty(env('BREVO_API_KEY')) && empty(env('EMAIL_TRANSPORT_DEFAULT_URL'))) {
+        $brevoKey = (string)env('BREVO_API_KEY');
+        $smtpDsn = (string)env('EMAIL_TRANSPORT_DEFAULT_URL');
+
+        if ($brevoKey === '' && $smtpDsn === '') {
             Log::warning("[mail] no transport - to $email | $subject | $body");
 
             return;
         }
 
+        $transport = $brevoKey !== ''
+            ? new BrevoTransport(['apiKey' => $brevoKey])
+            : new SmtpTransport(TransportFactory::parseDsn($smtpDsn));
+
         try {
-            $mailer = new Mailer('default');
-            Log::warning(sprintf(
-                '[mail] diag transport=%s brevo_key=%s email_from=%s',
-                get_class($mailer->getTransport()),
-                env('BREVO_API_KEY') ? 'set' : 'unset',
-                (string)env('EMAIL_FROM'),
-            ));
-            $mailer
+            $message = (new Message())
                 ->setFrom(env('EMAIL_FROM', 'no-reply@careerpass.local'))
                 ->setTo($email)
                 ->setSubject($subject)
-                ->deliver($body);
-        } catch (\Exception $e) {
+                ->setBodyText($body);
+            $transport->send($message);
+        } catch (\Throwable $e) {
             Log::error("[mail] send failed for $email: {$e->getMessage()}");
         }
     }
