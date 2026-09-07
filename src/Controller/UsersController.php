@@ -47,10 +47,14 @@ class UsersController extends AppController
     private function loginChallenge(int $userId, string $email, string $code): ?array
     {
         $events = $this->fetchTable('LoginEvents');
-        $recentDevices = $events->find()
+        // Count distinct devices in PHP: a DISTINCT/GROUP BY count subquery
+        // trips MySQL's only_full_group_by, and the row set here is tiny.
+        $recentHashes = $events->find()
             ->where(['user_id' => $userId, 'created >=' => (new DateTime())->modify('-60 seconds')])
-            ->distinct(['device_hash'])
-            ->count();
+            ->all()
+            ->extract('device_hash')
+            ->toList();
+        $recentDevices = count(array_unique($recentHashes));
 
         $codes = $this->fetchTable('AuthCodes');
         $pending = $codes->find()
