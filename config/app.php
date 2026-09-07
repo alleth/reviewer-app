@@ -2,6 +2,7 @@
 
 use App\Database\Driver\Mysql;
 use App\Log\Engine\StderrLog;
+use App\Mailer\Transport\BrevoTransport;
 use Cake\Cache\Engine\FileEngine;
 use Cake\Database\Connection;
 use Cake\Log\Engine\FileLog;
@@ -215,7 +216,13 @@ return [
      * 'YourTransport.php', where 'Your' is the name of the transport.
      */
     'EmailTransport' => [
-        'default' => [
+        // Railway blocks outbound SMTP, so when BREVO_API_KEY is set we send
+        // over Brevo's HTTPS API instead. Otherwise fall back to SMTP / the
+        // no-op logging path (see UsersController::sendMail()).
+        'default' => env('BREVO_API_KEY') ? [
+            'className' => BrevoTransport::class,
+            'apiKey' => env('BREVO_API_KEY'),
+        ] : [
             'className' => MailTransport::class,
             /*
              * The keys host, port, timeout, username, password, client and tls

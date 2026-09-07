@@ -83,13 +83,13 @@ class UsersController extends AppController
     }
 
     /**
-     * Sends one email. When no transport is configured
-     * (EMAIL_TRANSPORT_DEFAULT_URL unset) the message is written to the error
-     * log instead, so email-dependent flows stay testable before SMTP is wired.
+     * Sends one email. When no transport is configured (neither BREVO_API_KEY
+     * nor EMAIL_TRANSPORT_DEFAULT_URL set) the message is written to the error
+     * log instead, so email-dependent flows stay testable before mail is wired.
      */
     private function sendMail(string $email, string $subject, string $body): void
     {
-        if (empty(env('EMAIL_TRANSPORT_DEFAULT_URL'))) {
+        if (empty(env('BREVO_API_KEY')) && empty(env('EMAIL_TRANSPORT_DEFAULT_URL'))) {
             Log::warning("[mail] no transport - to $email | $subject | $body");
 
             return;
@@ -97,7 +97,7 @@ class UsersController extends AppController
 
         try {
             (new Mailer('default'))
-                ->setFrom(env('EMAIL_FROM', 'CareerPass <no-reply@careerpass.local>'))
+                ->setFrom(env('EMAIL_FROM', 'no-reply@careerpass.local'))
                 ->setTo($email)
                 ->setSubject($subject)
                 ->deliver($body);
