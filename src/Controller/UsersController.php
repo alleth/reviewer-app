@@ -96,7 +96,14 @@ class UsersController extends AppController
         }
 
         try {
-            (new Mailer('default'))
+            $mailer = new Mailer('default');
+            Log::warning(sprintf(
+                '[mail] diag transport=%s brevo_key=%s email_from=%s',
+                get_class($mailer->getTransport()),
+                env('BREVO_API_KEY') ? 'set' : 'unset',
+                (string)env('EMAIL_FROM'),
+            ));
+            $mailer
                 ->setFrom(env('EMAIL_FROM', 'no-reply@careerpass.local'))
                 ->setTo($email)
                 ->setSubject($subject)
