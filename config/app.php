@@ -1,6 +1,7 @@
 <?php
 
 use App\Database\Driver\Mysql;
+use App\Log\Engine\StderrLog;
 use Cake\Cache\Engine\FileEngine;
 use Cake\Database\Connection;
 use Cake\Log\Engine\FileLog;
@@ -364,6 +365,15 @@ return [
             'file' => 'queries',
             'url' => env('LOG_QUERIES_URL', null),
             'scopes' => ['cake.database.queries'],
+        ],
+        // Mirrors warning+ to stderr so the lines reach `railway logs`
+        // (FileLog only writes inside the container). Set LOG_STDERR=0 to mute.
+        'stderr' => [
+            'className' => StderrLog::class,
+            'levels' => env('LOG_STDERR', '1') === '0'
+                ? ['__disabled__']
+                : ['warning', 'error', 'critical', 'alert', 'emergency'],
+            'scopes' => null,
         ],
     ],
 
