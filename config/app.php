@@ -1,6 +1,7 @@
 <?php
 
 use App\Database\Driver\Mysql;
+use App\Error\AppExceptionRenderer;
 use App\Log\Engine\StderrLog;
 use App\Mailer\Transport\BrevoTransport;
 use Cake\Cache\Engine\FileEngine;
@@ -174,6 +175,8 @@ return [
      */
     'Error' => [
         'errorLevel' => E_ALL,
+        // Friendly JSON 503 for "DB asleep" errors instead of a raw SQLSTATE.
+        'exceptionRenderer' => AppExceptionRenderer::class,
         'skipLog' => [],
         'log' => true,
         'trace' => true,
