@@ -12,6 +12,7 @@ import PublicHeader from '../components/PublicHeader';
 import Modal from '../components/ui/Modal';
 import MobileMenu from '../components/ui/MobileMenu';
 import HandNote from '../components/ui/HandNote';
+import SiteFooter from '../components/SiteFooter';
 import LoginPage from './LoginPage';
 import { PLANS, COMPARISON } from '../plans';
 
@@ -271,6 +272,8 @@ export default function Pricing() {
                     </button>
                 </div>
             </div>
+
+            <SiteFooter />
         </div>
     );
 }

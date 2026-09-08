@@ -5,7 +5,7 @@ import MobileMenu from '../components/ui/MobileMenu';
 import Logo from '../components/ui/Logo';
 import ThemeToggle from '../components/ui/ThemeToggle';
 import LoginPage from './LoginPage';
-import { SOCIALS } from '../socials';
+import SiteFooter from '../components/SiteFooter';
 
 const newsColumns = [
     {
@@ -154,25 +154,9 @@ const LandingPage = () => {
             </Modal>
 
             {/* Footer */}
-            <footer className="relative z-[2] border-t border-gray-200 bg-gray-50 py-6 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
-                <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 sm:flex-row sm:justify-between">
-                    <small>&copy; {new Date().getFullYear()} CareerPass. All rights reserved.</small>
-                    <div className="flex gap-4">
-                        {SOCIALS.map(({ id, name, href, Icon }) => (
-                            <a
-                                key={id}
-                                href={href}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                aria-label={name}
-                                className="text-gray-500 hover:text-brand dark:text-gray-400"
-                            >
-                                <Icon size={18} />
-                            </a>
-                        ))}
-                    </div>
-                </div>
-            </footer>
+            <div className="relative z-[2] mt-auto">
+                <SiteFooter />
+            </div>
         </div>
     );
 };

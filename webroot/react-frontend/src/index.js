@@ -5,6 +5,9 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import axios from 'axios';
 import Dashboard from './pages/Dashboard';
 import AccountSetup from './pages/AccountSetup';
+import PrivacyPolicy from './pages/legal/PrivacyPolicy';
+import TermsOfService from './pages/legal/TermsOfService';
+import RefundPolicy from './pages/legal/RefundPolicy';
 import App from './App'; // <- Guest route handler
 import './theme'; // initialise theme store (applies the `dark` class on load)
 import './index.css';
@@ -91,6 +94,10 @@ function AppWrapper() {
             <Routes>
                 {/* Reachable regardless of isLoggedIn — AccountSetup redirects itself if there's no session. */}
                 <Route path="/account-setup" element={<AccountSetup />} />
+                {/* Legal pages render the same whether or not someone is signed in. */}
+                <Route path="/privacy" element={<PrivacyPolicy />} />
+                <Route path="/terms" element={<TermsOfService />} />
+                <Route path="/refund" element={<RefundPolicy />} />
                 <Route path="/*" element={isLoggedIn ? <Dashboard /> : <App />} />
             </Routes>
         </Router>

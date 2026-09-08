@@ -323,8 +323,8 @@ function LoginPage({ mode = 'login', onClose }) {
             {mode === 'signup' && (
                 <div className="mt-4 text-center text-xs text-gray-500 dark:text-gray-400">
                     By signing up, you agree to our{' '}
-                    <a href="/terms" className="text-brand hover:text-brand-dark">Terms Policy</a> and{' '}
-                    <a href="/privacy" className="text-brand hover:text-brand-dark">Privacy Notice</a>.
+                    <a href="/terms" className="text-brand hover:text-brand-dark">Terms of Service</a> and{' '}
+                    <a href="/privacy" className="text-brand hover:text-brand-dark">Privacy Policy</a>.
                 </div>
             )}
 

@@ -14,6 +14,7 @@ import Modal from './ui/Modal';
 import MobileMenu from './ui/MobileMenu';
 import Logo from './ui/Logo';
 import LoginPage from '../pages/LoginPage';
+import SiteFooter from './SiteFooter';
 import { SOCIALS } from '../socials';
 import { PLANS } from '../plans';
 
@@ -237,6 +238,8 @@ const Explore = () => {
                     </button>
                 </div>
             </div>
+
+            <SiteFooter />
         </div>
     );
 };
