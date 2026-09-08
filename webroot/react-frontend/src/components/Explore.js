@@ -109,17 +109,18 @@ const Explore = () => {
                     <div className="lg:col-span-3">
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 sm:text-3xl">What is CareerPass?</h2>
                         <p className="mt-4 text-gray-600 dark:text-gray-300">
-                            CareerPass is a Filipino-built online reviewer for the{' '}
-                            <strong>Civil Service Examination (CSE-PPT)</strong> — both the Professional and
-                            Sub-Professional levels. Instead of juggling photocopied handouts and scattered PDFs,
-                            you get one place to study: organized lessons, a large bank of practice questions, and
-                            full-length mock exams that behave like the real thing.
+                            CareerPass is a Filipino-built platform for people preparing for the exams that
+                            shape their careers. Instead of juggling photocopied handouts and scattered PDFs,
+                            you get one focused place to study: organized lessons, a large bank of practice
+                            questions, and full-length mock exams that behave like the real thing.
                         </p>
                         <p className="mt-3 text-gray-600 dark:text-gray-300">
-                            It's made for people reviewing around a full-time job or school — working parents,
-                            fresh graduates, and government hopefuls in the provinces who don't have access to a
-                            face-to-face review center. Everything runs in your browser, on any device, at your
-                            own pace.
+                            Right now the reviewer covers the{' '}
+                            <strong>Civil Service Examination (CSE-PPT)</strong>, Professional and
+                            Sub-Professional levels. It's made for people reviewing around a full-time job or
+                            school — working parents, fresh graduates, and hopefuls in the provinces who don't
+                            have access to a face-to-face review center. Everything runs in your browser, on any
+                            device, at your own pace.
                         </p>
                     </div>
 
@@ -131,9 +132,10 @@ const Explore = () => {
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Our objective</h3>
                         </div>
                         <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">
-                            Make quality Civil Service Exam preparation <strong>affordable and accessible to
-                            every Filipino</strong> aiming for a career in government — and build a supportive
-                            community that helps each other get there.
+                            Give every Filipino a <strong>more convenient and affordable place to prepare</strong>{' '}
+                            for the exams that open doors to a better career — quality review that doesn't depend
+                            on living near a review center — and a supportive community that helps each other get
+                            there.
                         </p>
                     </div>
                 </section>
