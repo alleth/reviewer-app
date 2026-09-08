@@ -27,6 +27,10 @@ class UsersController extends AppController
     /** Distinct devices within 60s that trips the login-challenge guard. */
     private const DEVICE_SWITCH_LIMIT = 4;
 
+    /** Failed password attempts per identifier within the window that trip the throttle. */
+    private const LOGIN_MAX_FAILURES = 10;
+    private const LOGIN_FAILURE_WINDOW_MINUTES = 15;
+
     /** A hash that stays stable per browser/device (used by the guard). */
     private function deviceHash(): string
     {
@@ -41,6 +45,66 @@ class UsersController extends AppController
             'device_hash' => $this->deviceHash(),
             'created' => new DateTime(),
         ]));
+    }
+
+    /** Normalizes a submitted username/email into a throttle bucket key. */
+    private function loginIdentifier(string $raw): string
+    {
+        return mb_strtolower(trim($raw));
+    }
+
+    /**
+     * Password brute-force throttle. Returns a 429 response when this identifier
+     * has had too many failed attempts inside the window, else null. Runs before
+     * the password is checked so a locked bucket costs one COUNT query.
+     */
+    private function loginThrottle(string $identifier): ?Response
+    {
+        if ($identifier === '') {
+            return null;
+        }
+
+        $since = (new DateTime())->modify('-' . self::LOGIN_FAILURE_WINDOW_MINUTES . ' minutes');
+        $recent = $this->fetchTable('LoginAttempts')->find()
+            ->where(['identifier' => $identifier, 'created >=' => $since])
+            ->count();
+
+        if ($recent < self::LOGIN_MAX_FAILURES) {
+            return null;
+        }
+
+        return $this->json([
+            'success' => false,
+            'message' => 'Too many failed sign-in attempts. Please wait about '
+                . self::LOGIN_FAILURE_WINDOW_MINUTES
+                . ' minutes and try again, or reset your password.',
+        ], 429);
+    }
+
+    /** Records one failed login against the identifier and prunes day-old rows. */
+    private function recordLoginFailure(string $identifier): void
+    {
+        if ($identifier === '') {
+            return;
+        }
+
+        $attempts = $this->fetchTable('LoginAttempts');
+        $attempts->save($attempts->newEntity([
+            'identifier' => $identifier,
+            'created' => new DateTime(),
+        ]));
+        // Opportunistic prune — keeps the table from growing unbounded without a cron.
+        $attempts->deleteAll(['created <' => (new DateTime())->modify('-1 day')]);
+    }
+
+    /** Clears every failed-login row for the identifier (called on a correct password). */
+    private function clearLoginFailures(string $identifier): void
+    {
+        if ($identifier === '') {
+            return;
+        }
+
+        $this->fetchTable('LoginAttempts')->deleteAll(['identifier' => $identifier]);
     }
 
     /**
@@ -294,6 +358,12 @@ class UsersController extends AppController
 
             $username = $data['user_name'] ?? '';
             $password = $data['user_pass'] ?? '';
+            $identifier = $this->loginIdentifier((string)$username);
+
+            $throttled = $this->loginThrottle($identifier);
+            if ($throttled !== null) {
+                return $throttled;
+            }
 
             // The frontend advertises "Username or Email" on this field, so match either.
             $user = $this->Users->find()
@@ -301,6 +371,8 @@ class UsersController extends AppController
                 ->first();
 
             if ($user && $user->user_pass !== null && password_verify($password, $user->user_pass)) {
+                // Correct password — clear the guess counter for this identifier.
+                $this->clearLoginFailures($identifier);
                 $challenge = $this->loginChallenge(
                     (int)$user->user_id,
                     (string)$user->email,
@@ -333,6 +405,8 @@ class UsersController extends AppController
                     ],
                 ];
             } else {
+                // Wrong password, or unknown account — count it against the identifier.
+                $this->recordLoginFailure($identifier);
                 $response = ['success' => false, 'message' => 'Invalid username or password'];
             }
         } catch (Throwable $e) {
