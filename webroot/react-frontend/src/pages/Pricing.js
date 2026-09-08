@@ -184,6 +184,11 @@ export default function Pricing() {
                 <p className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
                     Access expires at the end of the period — your progress is kept, and you can buy another pass anytime.
                 </p>
+                <p className="mt-2 text-center text-xs text-gray-400 dark:text-gray-500">
+                    By purchasing a pass you agree to our{' '}
+                    <Link to="/terms" className="hover:text-brand">Terms of Service</Link> and{' '}
+                    <Link to="/refund" className="hover:text-brand">Refund Policy</Link>.
+                </p>
 
                 {/* Reassurance strip */}
                 <div className="mt-14 grid grid-cols-1 gap-6 sm:grid-cols-3">

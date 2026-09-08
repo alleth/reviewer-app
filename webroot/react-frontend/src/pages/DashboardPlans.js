@@ -78,6 +78,11 @@ export default function DashboardPlans({ user }) {
                     See the comparison table
                 </Link>.
             </p>
+            <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+                By purchasing a pass you agree to our{' '}
+                <Link to="/terms" className="hover:text-brand">Terms of Service</Link> and{' '}
+                <Link to="/refund" className="hover:text-brand">Refund Policy</Link>.
+            </p>
         </section>
     );
 }

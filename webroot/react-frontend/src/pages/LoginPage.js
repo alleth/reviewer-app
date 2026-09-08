@@ -55,6 +55,11 @@ function LoginPage({ mode = 'login', onClose }) {
     const handleSignup = async (e) => {
         e.preventDefault();
 
+        if (formData.password.length < 8) {
+            setError('Password must be at least 8 characters.');
+            return;
+        }
+
         if (formData.password !== formData.confirmPassword) {
             setError('Passwords do not match');
             return;
@@ -254,8 +259,12 @@ function LoginPage({ mode = 'login', onClose }) {
                         value={formData.password}
                         onChange={handleChange}
                         required
+                        minLength={mode === 'signup' ? 8 : undefined}
                         className="form-input"
                     />
+                    {mode === 'signup' && (
+                        <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">At least 8 characters.</p>
+                    )}
                 </div>
 
                 {mode === 'signup' && (

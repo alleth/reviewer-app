@@ -10,12 +10,19 @@ use Cake\Log\Log;
 use Cake\Mailer\Message;
 use Cake\Mailer\Transport\SmtpTransport;
 use Cake\Mailer\TransportFactory;
+use Throwable;
 
 class UsersController extends AppController
 {
     /** How long an emailed code stays valid, and how many guesses it allows. */
     private const CODE_TTL_MINUTES = 10;
     private const CODE_MAX_ATTEMPTS = 5;
+
+    /** Minimum password length enforced on every path that sets a password. */
+    private const MIN_PASSWORD_LENGTH = 8;
+
+    /** bcrypt only hashes the first 72 bytes; reject longer so nothing is silently dropped. */
+    private const MAX_PASSWORD_BYTES = 72;
 
     /** Distinct devices within 60s that trips the login-challenge guard. */
     private const DEVICE_SWITCH_LIMIT = 4;
@@ -119,7 +126,7 @@ class UsersController extends AppController
                 ->setSubject($subject)
                 ->setBodyText($body);
             $transport->send($message);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             Log::error("[mail] send failed for $email: {$e->getMessage()}");
         }
     }
@@ -281,11 +288,6 @@ class UsersController extends AppController
             return $blocked;
         }
 
-        // Allow CORS for development
-        $this->response = $this->response
-            ->withHeader('Access-Control-Allow-Origin', '*')
-            ->withHeader('Access-Control-Allow-Credentials', 'true');
-
         try {
             // Automatically parses JSON or form data
             $data = $this->request->getData();
@@ -307,6 +309,11 @@ class UsersController extends AppController
                 if ($challenge !== null) {
                     $response = $challenge;
                 } else {
+                    // Upgrade the stored hash if PHP's default algorithm/cost has
+                    // moved on since it was created. startSession() persists it.
+                    if (password_needs_rehash((string)$user->user_pass, PASSWORD_DEFAULT)) {
+                        $user->user_pass = password_hash($password, PASSWORD_DEFAULT);
+                    }
                     $this->recordLoginEvent((int)$user->user_id);
                     $this->startSession($user);
                     $response = ['success' => true, 'user' => $user];
@@ -328,11 +335,8 @@ class UsersController extends AppController
             } else {
                 $response = ['success' => false, 'message' => 'Invalid username or password'];
             }
-        } catch (\Exception $e) {
-            return $this->response
-                ->withStatus(500)
-                ->withType('application/json')
-                ->withStringBody(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        } catch (Throwable $e) {
+            return $this->serverError($e);
         }
 
         return $this->response
@@ -426,11 +430,8 @@ class UsersController extends AppController
             return $this->response
                 ->withType('application/json')
                 ->withStringBody(json_encode(['success' => true, 'user' => $user, 'isNewUser' => $isNewUser]));
-        } catch (\Exception $e) {
-            return $this->response
-                ->withStatus(500)
-                ->withType('application/json')
-                ->withStringBody(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        } catch (Throwable $e) {
+            return $this->serverError($e);
         }
     }
 
@@ -470,12 +471,10 @@ class UsersController extends AppController
             }
 
             $data = $this->request->getData();
-            $password = $data['user_pass'] ?? '';
-            if ($password === '') {
-                return $this->response
-                    ->withStatus(422)
-                    ->withType('application/json')
-                    ->withStringBody(json_encode(['success' => false, 'message' => 'Password is required.']));
+            $password = (string)($data['user_pass'] ?? '');
+            $passwordError = $this->passwordError($password);
+            if ($passwordError !== null) {
+                return $this->json(['success' => false, 'message' => $passwordError], 422);
             }
 
             $code = trim((string)($data['code'] ?? ''));
@@ -522,11 +521,8 @@ class UsersController extends AppController
             return $this->response
                 ->withType('application/json')
                 ->withStringBody(json_encode(['success' => true, 'user' => $user]));
-        } catch (\Exception $e) {
-            return $this->response
-                ->withStatus(500)
-                ->withType('application/json')
-                ->withStringBody(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        } catch (Throwable $e) {
+            return $this->serverError($e);
         }
     }
 
@@ -576,11 +572,8 @@ class UsersController extends AppController
             return $this->response
                 ->withType('application/json')
                 ->withStringBody(json_encode(['success' => true, 'user' => $user]));
-        } catch (\Exception $e) {
-            return $this->response
-                ->withStatus(500)
-                ->withType('application/json')
-                ->withStringBody(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        } catch (Throwable $e) {
+            return $this->serverError($e);
         }
     }
 
@@ -635,11 +628,17 @@ class UsersController extends AppController
         try {
             $data = $this->request->getData();
 
+            $plainPassword = (string)($data['user_pass'] ?? '');
+            $passwordError = $this->passwordError($plainPassword);
+            if ($passwordError !== null) {
+                return $this->json(['success' => false, 'message' => $passwordError], 422);
+            }
+
             $data['fname'] = $data['fname'] ?? '';
             $data['lname'] = $data['lname'] ?? '';
             $data['email'] = $data['email'] ?? '';
             $data['user_name'] = $data['user_name'] ?? '';
-            $data['user_pass'] = password_hash($data['user_pass'] ?? '', PASSWORD_DEFAULT);
+            $data['user_pass'] = password_hash($plainPassword, PASSWORD_DEFAULT);
 
             $user = $this->Users->newEmptyEntity();
             $user = $this->Users->patchEntity($user, $data);
@@ -649,13 +648,8 @@ class UsersController extends AppController
             } else {
                 $response = ['success' => false, 'errors' => $user->getErrors()];
             }
-        } catch (\Exception $e) {
-            $response = ['success' => false, 'error' => $e->getMessage()];
-
-            return $this->response
-                ->withStatus(500)
-                ->withType('application/json')
-                ->withStringBody(json_encode($response));
+        } catch (Throwable $e) {
+            return $this->serverError($e);
         }
 
         return $this->response
@@ -672,6 +666,34 @@ class UsersController extends AppController
             ->withStatus($status)
             ->withType('application/json')
             ->withStringBody(json_encode($body));
+    }
+
+    /**
+     * Validates a plaintext password for every path that sets one (register,
+     * setupAccount, resetPassword, changePassword). Returns an error message, or
+     * null when the password is acceptable.
+     */
+    private function passwordError(string $password): ?string
+    {
+        if (strlen($password) < self::MIN_PASSWORD_LENGTH) {
+            return 'Password must be at least ' . self::MIN_PASSWORD_LENGTH . ' characters.';
+        }
+        if (strlen($password) > self::MAX_PASSWORD_BYTES) {
+            return 'Password must be ' . self::MAX_PASSWORD_BYTES . ' characters or fewer.';
+        }
+
+        return null;
+    }
+
+    /**
+     * Logs the real exception server-side and returns a generic 500. Never echo
+     * getMessage() to the client — it leaks DB/schema internals.
+     */
+    private function serverError(Throwable $e): Response
+    {
+        Log::error('[users] ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+
+        return $this->json(['success' => false, 'message' => 'Something went wrong. Please try again.'], 500);
     }
 
     /**
@@ -722,11 +744,9 @@ class UsersController extends AppController
         $code = trim((string)($data['code'] ?? ''));
         $password = (string)($data['password'] ?? '');
 
-        if (strlen($password) < 8) {
-            return $this->json(
-                ['success' => false, 'message' => 'Password must be at least 8 characters.'],
-                422,
-            );
+        $passwordError = $this->passwordError($password);
+        if ($passwordError !== null) {
+            return $this->json(['success' => false, 'message' => $passwordError], 422);
         }
 
         $user = $email !== ''
@@ -771,11 +791,9 @@ class UsersController extends AppController
         $current = (string)($data['current_password'] ?? '');
         $next = (string)($data['new_password'] ?? '');
 
-        if (strlen($next) < 8) {
-            return $this->json(
-                ['success' => false, 'message' => 'New password must be at least 8 characters.'],
-                422,
-            );
+        $passwordError = $this->passwordError($next);
+        if ($passwordError !== null) {
+            return $this->json(['success' => false, 'message' => $passwordError], 422);
         }
 
         $user = $this->Users->get($userId);
@@ -788,6 +806,12 @@ class UsersController extends AppController
         }
         if (!password_verify($current, $user->user_pass)) {
             return $this->json(['success' => false, 'message' => 'Your current password is incorrect.'], 400);
+        }
+        if (password_verify($next, $user->user_pass)) {
+            return $this->json(
+                ['success' => false, 'message' => 'Your new password must be different from the current one.'],
+                422,
+            );
         }
 
         $newToken = bin2hex(random_bytes(20));

@@ -69,9 +69,13 @@ class UsersTable extends Table
             ->maxLength('user_name', 35)
             ->allowEmptyString('user_name');
 
+        // Stores a password_hash() digest, not the plaintext. bcrypt is 60 chars
+        // today, but PASSWORD_DEFAULT can change to a longer algorithm — keep this
+        // at 255 (and the DB column VARCHAR(255)) so a future hash is never
+        // silently truncated. Plaintext length is checked in UsersController.
         $validator
             ->scalar('user_pass')
-            ->maxLength('user_pass', 64)
+            ->maxLength('user_pass', 255)
             ->allowEmptyString('user_pass');
 
         return $validator;
