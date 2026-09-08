@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { FaArrowRight, FaLock } from 'react-icons/fa6';
-import { REVIEWERS, UPCOMING_REVIEWERS, getPurchases, daysLeft } from '../reviewers';
+import { REVIEWERS, getPurchases, daysLeft } from '../reviewers';
 
 export default function MyLibrary({ user }) {
     const purchases = getPurchases(user);
@@ -55,26 +55,6 @@ export default function MyLibrary({ user }) {
                     })}
                 </div>
             )}
-
-            {/* Future reviewers */}
-            <div className="mt-10">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                    Coming to CareerPass
-                </p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    {UPCOMING_REVIEWERS.map((r) => (
-                        <div key={r.id} className="card flex items-center gap-3 p-4 opacity-70">
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500">
-                                <FaLock size={14} />
-                            </span>
-                            <div>
-                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{r.name}</p>
-                                <p className="text-xs text-gray-400 dark:text-gray-500">{r.note}</p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
         </section>
     );
 }

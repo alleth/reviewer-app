@@ -18,12 +18,6 @@ export const REVIEWERS = {
     },
 };
 
-/** Reviewers announced but not yet available — shown as locked teasers. */
-export const UPCOMING_REVIEWERS = [
-    { id: 'let', name: 'Licensure Exam for Teachers (LET)', note: 'In development' },
-    { id: 'nle', name: 'Nursing Licensure Exam (NLE)', note: 'Planned' },
-];
-
 /**
  * A user's purchases. The backend doesn't send these yet, so this returns []
  * for real accounts — every screen degrades to an empty / "get a pass" state.
