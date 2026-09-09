@@ -144,7 +144,7 @@ CREATE TABLE login_attempts (login_attempt_id INT UNSIGNED AUTO_INCREMENT PRIMAR
 ### Configuration
 
 - Backend env: `config/.env` (copy from `config/.env.example`). Key vars: `FRONTEND_URL`, `SECURITY_SALT`, `DATABASE_URL`, `GOOGLE_CLIENT_ID` (read by `googleLogin()`; **not** listed in `.env.example` — add it manually, and set it on Railway). Email is optional and prefers `BREVO_API_KEY` (Brevo HTTP API — the Railway path, since SMTP is blocked there) over `EMAIL_TRANSPORT_DEFAULT_URL` (an SMTP DSN like `smtp://user:pass@host:587`); set `EMAIL_FROM` with either. With none set, `sendMail()` logs the message instead of sending. None of these are in `.env.example` — add manually and set on Railway.
-- **Prod values on Railway:** `FRONTEND_URL=https://career-pass.org`, `EMAIL_FROM=no-reply@career-pass.org` (Brevo domain-authenticated: DKIM + DMARC records live in Cloudflare DNS for `career-pass.org`), `BREVO_API_KEY` set, `GOOGLE_CLIENT_ID` set. **Brevo gotcha:** the account has the *Authorized IPs* security feature enabled, which blocks API sends from unknown IPs — Railway's outbound IP changes on restart, so mail can silently stop until the new IP is authorized in Brevo → Settings → Security (or disable that feature).
+- **Prod values on Railway:** `FRONTEND_URL=https://career-pass.org`, `EMAIL_FROM=no-reply@career-pass.org` (Brevo domain-authenticated: DKIM + DMARC records live in Cloudflare DNS for `career-pass.org`), `BREVO_API_KEY` set, `GOOGLE_CLIENT_ID` set. Brevo's *Authorized IPs* restriction (Settings → Security) is **off** for both API and SMTP keys — leave it off: it silently blocks sends when Railway's outbound IP changes, and Gmail's "send as `support@`" SMTP relay needs it off too.
 - **Google OAuth** (Cloud project `skillsprint-498012`, client "SkillSprint Web Client"): Authorized JavaScript origins must list every frontend origin — currently `https://career-pass.org`, `https://reviewer-app.pages.dev`, `http://localhost:3000`. A new frontend domain that isn't added here gets a silent `403` / "origin not allowed" on the Google button.
 - `config/app_local.php` (not committed — copy from `config/app_local.example.php`) sets the database connection under `Datasources.default`.
 - Frontend env: local dev reads `webroot/react-frontend/.env` (copy from `.env.example`; `.env` is gitignored). **In prod the Cloudflare Pages project's env vars are the source of truth** (the Pages build injects them, not any committed file): `REACT_APP_API_URL=https://api.career-pass.org` and `REACT_APP_GOOGLE_CLIENT_ID` (must match the backend's `GOOGLE_CLIENT_ID`). `src/api.js` fallback is `http://localhost/reviewer_app`.
@@ -168,13 +168,17 @@ The `Dockerfile` builds a `php:8.2-apache` image with `pdo_mysql`, sets `Documen
 **Railway.** `railway.toml` now sets `deploy.sleepApplication = false` (always-on — no scale-to-zero). This needs the project on a **paid plan** (Hobby+); on the trial's one-time credit, always-on drains it and then the project suspends. The MySQL service has its **own** sleep toggle in its Railway *Settings* (not in `railway.toml`) — that must be disabled too. `docker-start.sh` does **not** run migrations — apply new tables/columns by hand (see **Data Model**). The `AppExceptionRenderer` 503 + retrying MySQL driver still cover the brief window during a deploy/restart.
 
 **Cloudflare.** `career-pass.org` is on **Cloudflare Registrar** (zone already on Cloudflare nameservers — no registrar step). SSL/TLS mode: Full. DNS records:
-| Name | Type | Value | Proxy |
-|------|------|-------|-------|
-| `career-pass.org` (apex) | CNAME | `reviewer-app.pages.dev` | Proxied |
-| `www` | CNAME | `career-pass.org` | Proxied (a Redirect Rule 301s `www.*` → apex) |
-| `api` | CNAME | `<svc>.up.railway.app` (from Railway) | **DNS only** — Railway terminates TLS; proxying breaks its Let's Encrypt renewal |
-| `_railway-verify.api` | TXT | Railway domain-verification token | DNS only |
-| `brevo1._domainkey`, `brevo2._domainkey` | CNAME | `b{1,2}.career-pass-org.dkim.brevo.com` | DNS only |
-| `@`, `_dmarc` | TXT | Brevo code + DMARC policy | — |
+| Name | Type | Value | Proxy | Purpose |
+|------|------|-------|-------|---------|
+| `career-pass.org` (apex) | CNAME | `reviewer-app.pages.dev` | Proxied | frontend (Pages) |
+| `www` | CNAME | `career-pass.org` | Proxied | a Redirect Rule 301s `www.*` → apex |
+| `api` | CNAME | `<svc>.up.railway.app` (from Railway) | **DNS only** | backend; Railway terminates TLS, proxying breaks its Let's Encrypt renewal |
+| `_railway-verify.api` | TXT | Railway domain-verification token | DNS only | Railway custom-domain check |
+| `brevo1._domainkey`, `brevo2._domainkey` | CNAME | `b{1,2}.career-pass-org.dkim.brevo.com` | DNS only | Brevo DKIM (outbound `no-reply@`) |
+| `_dmarc` | TXT | `v=DMARC1; p=none; rua=…` (Brevo) | — | DMARC policy |
+| `@` | TXT | `brevo-code:…` **and** `v=spf1 include:_spf.mx.cloudflare.net ~all` | — | Brevo domain verification + SPF for Email Routing |
+| `@` | MX ×3 | `route1/2/3.mx.cloudflare.net` | — | **Cloudflare Email Routing** — inbound, managed/locked by CF |
+
+**Email**: outbound (`no-reply@career-pass.org`, verification codes/notices) goes through Brevo's API from Railway. Inbound `support@career-pass.org` is a **Cloudflare Email Routing** rule that forwards to a personal Gmail (which is also set up to *send as* `support@` via Brevo SMTP relay). The MX/SPF rows above are Email-Routing's and are inbound-only — they don't affect Brevo sending.
 
 Cloudflare Pages: Git-connected to `alleth/reviewer-app` `master`, runs its own build (see **Frontend**). A push to `master` deploys + promotes; "Retry deployment" builds without promoting.
