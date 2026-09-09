@@ -3,5 +3,7 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-# Trial/free plan requires services to run in serverless mode (scale to zero when idle)
-sleepApplication = true
+# Keep the backend always-on (no scale-to-zero). Requires the project to be on a
+# paid plan (Hobby+); on the trial's one-time credit this drains fast. The MySQL
+# service has its own sleep toggle in its Railway Settings — disable that too.
+sleepApplication = false
