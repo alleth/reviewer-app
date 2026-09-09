@@ -42,16 +42,13 @@ export default function Review({ user }) {
             {/* Start practice */}
             <Link
                 to="/practice"
-                className="group mt-6 flex items-center justify-between gap-4 rounded-2xl bg-gradient-to-br from-brand to-brand-dark p-6 text-white shadow-lg shadow-brand/25 transition-transform hover:-translate-y-0.5"
+                className="mt-6 flex items-center justify-between gap-4 rounded-xl bg-brand px-5 py-4 text-white transition-colors hover:bg-brand-dark"
             >
                 <div>
-                    <p className="text-sm text-white/80">Ready to review?</p>
-                    <p className="mt-0.5 text-xl font-bold">Start a practice set</p>
-                    <p className="mt-1 text-sm text-white/80">Randomized questions with instant scoring.</p>
+                    <p className="font-semibold">Start a practice set</p>
+                    <p className="mt-0.5 text-sm text-white/80">Randomized questions with instant scoring.</p>
                 </div>
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
-                    <FaArrowRight size={20} />
-                </span>
+                <FaArrowRight size={16} className="shrink-0" />
             </Link>
 
             {/* Topics */}
