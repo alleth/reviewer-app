@@ -51,4 +51,16 @@ export function fetchBillingHistory() {
     return api.get('/api/billing/history').then((res) => res.data?.purchases || []);
 }
 
+/** Reviewer topics (for the practice topic picker). */
+export function fetchTopics() {
+    return api.get('/api/topics').then((res) => res.data?.data || []);
+}
+
+/** A randomized practice set. `topicId` optional; `limit` 1–50. */
+export function fetchPractice({ topicId, limit = 20 } = {}) {
+    const params = { limit };
+    if (topicId) params.topic_id = topicId;
+    return api.get('/api/questions/practice', { params }).then((res) => res.data?.data || []);
+}
+
 export default API_URL;

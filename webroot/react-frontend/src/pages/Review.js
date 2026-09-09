@@ -5,9 +5,8 @@ import { REVIEWERS, getPurchases } from '../reviewers';
 
 /**
  * The "start reviewing" page for one reviewer — reached by clicking a card in
- * My Library. Lists the reviewer's topics and the ways to practice. The actual
- * question-answering screens aren't built yet (they link to /practice ->
- * "Coming soon").
+ * My Library. Lists the reviewer's topics and the ways to practice. Practice
+ * links go to /practice (src/pages/Practice.js); mock exams aren't built yet.
  */
 export default function Review({ user }) {
     const { reviewer: reviewerId } = useParams();
@@ -59,7 +58,7 @@ export default function Review({ user }) {
                 {reviewer.topics.map((topic) => (
                     <Link
                         key={topic}
-                        to="/practice"
+                        to={`/practice?topic=${encodeURIComponent(topic)}`}
                         className="card group flex items-center justify-between p-4 transition-colors hover:border-brand"
                     >
                         <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{topic}</span>

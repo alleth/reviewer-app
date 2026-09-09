@@ -7,6 +7,7 @@ import DashboardHome from './DashboardHome';
 import MyLibrary from './MyLibrary';
 import DashboardPlans from './DashboardPlans';
 import Review from './Review';
+import Practice from './Practice';
 import Settings from './Settings';
 import Pricing from './Pricing';
 import Receipt from './Receipt';
@@ -52,6 +53,7 @@ function DashboardShell({ user }) {
                             <Route path="/checkout/cancel" element={<CheckoutCancel />} />
                             <Route path="/settings" element={<Settings />} />
                             <Route path="/review/:reviewer" element={<Review user={user} />} />
+                            <Route path="/practice" element={<Practice user={user} />} />
                             <Route path="*" element={<ComingSoon />} />
                         </Routes>
                     </main>

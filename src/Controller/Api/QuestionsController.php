@@ -3,8 +3,6 @@ declare(strict_types=1);
 
 namespace App\Controller\Api;
 
-use App\Controller\AppController;
-
 class QuestionsController extends AppController
 {
     public function initialize(): void
