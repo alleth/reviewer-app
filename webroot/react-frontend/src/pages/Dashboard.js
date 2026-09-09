@@ -2,7 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate, Link } from 'react-router-dom';
 import TopNavbar from '../components/TopNavbar';
 import DashboardSidebar from '../components/DashboardSidebar';
-import SiteFooter from '../components/SiteFooter';
+import DashboardFooter from '../components/DashboardFooter';
 import DashboardHome from './DashboardHome';
 import MyLibrary from './MyLibrary';
 import DashboardPlans from './DashboardPlans';
@@ -57,7 +57,7 @@ function DashboardShell({ user }) {
                     </main>
                 </div>
             </div>
-            <SiteFooter />
+            <DashboardFooter />
         </div>
     );
 }
