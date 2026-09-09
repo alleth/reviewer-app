@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import LegalLayout, { Section, Bullets } from './LegalLayout';
-import { CONTACT_EMAIL, COMPANY, LAST_UPDATED } from '../../legal';
+import { CONTACT_EMAIL, COMPANY, COMPANY_ADDRESS, LAST_UPDATED } from '../../legal';
 
 export default function PrivacyPolicy() {
     return (
@@ -84,7 +84,7 @@ export default function PrivacyPolicy() {
                         <><strong>Google</strong> &mdash; only when you choose Google Sign-In, and only to verify your
                             identity.</>,
                         <><strong>Legal and safety</strong> &mdash; when required by law, subpoena, or government
-                            request, or to protect the rights, safety, and property of {COMPANY}, our users, or the
+                            request, or to protect the rights, safety, and property of CareerPass, our users, or the
                             public.</>,
                         <><strong>Business transfers</strong> &mdash; in connection with a merger, acquisition, or sale
                             of assets, in which case we will require the recipient to honor this Policy.</>,
@@ -164,6 +164,12 @@ export default function PrivacyPolicy() {
                 <p>
                     For questions about this Policy or your personal data, contact our Data Protection Officer at{' '}
                     <a href={`mailto:${CONTACT_EMAIL}`} className="text-brand hover:text-brand-dark">{CONTACT_EMAIL}</a>.
+                </p>
+                <p>
+                    {COMPANY}<br />
+                    {COMPANY_ADDRESS}
+                </p>
+                <p>
                     See also our{' '}
                     <Link to="/terms" className="text-brand hover:text-brand-dark">Terms of Service</Link> and{' '}
                     <Link to="/refund" className="text-brand hover:text-brand-dark">Refund Policy</Link>.

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import LegalLayout, { Section, Bullets } from './LegalLayout';
-import { CONTACT_EMAIL, LAST_UPDATED, REFUND_WINDOW_DAYS } from '../../legal';
+import { CONTACT_EMAIL, COMPANY, COMPANY_ADDRESS, LAST_UPDATED, REFUND_WINDOW_DAYS } from '../../legal';
 
 export default function RefundPolicy() {
     return (
@@ -107,6 +107,12 @@ export default function RefundPolicy() {
                 <p>
                     Refund questions and requests:{' '}
                     <a href={`mailto:${CONTACT_EMAIL}`} className="text-brand hover:text-brand-dark">{CONTACT_EMAIL}</a>.
+                </p>
+                <p>
+                    {COMPANY}<br />
+                    {COMPANY_ADDRESS}
+                </p>
+                <p>
                     See also our{' '}
                     <Link to="/terms" className="text-brand hover:text-brand-dark">Terms of Service</Link> and{' '}
                     <Link to="/privacy" className="text-brand hover:text-brand-dark">Privacy Policy</Link>.

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import LegalLayout, { Section, Bullets } from './LegalLayout';
-import { CONTACT_EMAIL, COMPANY, VENUE, LAST_UPDATED } from '../../legal';
+import { CONTACT_EMAIL, COMPANY, COMPANY_ADDRESS, VENUE, LAST_UPDATED } from '../../legal';
 
 export default function TermsOfService() {
     return (
@@ -85,7 +85,7 @@ export default function TermsOfService() {
             <Section n={7} title="Intellectual property">
                 <p>
                     The Platform and all of its content &mdash; text, questions, explanations, graphics, logos, the
-                    CareerPass name and mark, and software &mdash; are owned by {COMPANY} or its licensors and are
+                    CareerPass name and mark, and software &mdash; are owned by CareerPass or its licensors and are
                     protected by Philippine and international intellectual property laws. Subject to these Terms and
                     your active access pass, we grant you a limited, personal, non-exclusive, non-transferable,
                     revocable license to access and use the content for your own exam preparation. No other rights
@@ -133,7 +133,7 @@ export default function TermsOfService() {
 
             <Section n={12} title="Limitation of liability">
                 <p>
-                    To the fullest extent permitted by law, {COMPANY} and its owners, officers, employees, and
+                    To the fullest extent permitted by law, CareerPass and its owners, officers, employees, and
                     partners will not be liable for any indirect, incidental, special, consequential, or exemplary
                     damages, or for lost profits, data, goodwill, or opportunities, arising out of or relating to
                     your use of the Platform. Our total aggregate liability for any claim relating to the Platform
@@ -145,7 +145,7 @@ export default function TermsOfService() {
 
             <Section n={13} title="Indemnification">
                 <p>
-                    You agree to indemnify and hold harmless {COMPANY} from any claims, losses, liabilities, and
+                    You agree to indemnify and hold harmless CareerPass from any claims, losses, liabilities, and
                     expenses (including reasonable legal fees) arising from your misuse of the Platform or your
                     breach of these Terms.
                 </p>
@@ -173,6 +173,12 @@ export default function TermsOfService() {
                 <p>
                     Questions about these Terms can be sent to{' '}
                     <a href={`mailto:${CONTACT_EMAIL}`} className="text-brand hover:text-brand-dark">{CONTACT_EMAIL}</a>.
+                </p>
+                <p>
+                    {COMPANY}<br />
+                    {COMPANY_ADDRESS}
+                </p>
+                <p>
                     See also our{' '}
                     <Link to="/privacy" className="text-brand hover:text-brand-dark">Privacy Policy</Link> and{' '}
                     <Link to="/refund" className="text-brand hover:text-brand-dark">Refund Policy</Link>.
