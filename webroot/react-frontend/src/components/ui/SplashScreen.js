@@ -4,8 +4,8 @@ import React from 'react';
  * Branded full-screen loader shown while the app resolves auth state
  * (`index.js`, `isLoggedIn === null`) — replaces a bare "Loading…".
  *
- * Fades in after ~150ms (see the `splash-in` animation delay), so the common
- * fast-resolve case shows nothing rather than a flicker.
+ * Visually identical to the static `#boot-splash` in `public/index.html`, so
+ * the handoff when React mounts is seamless (no fade — that would dip).
  */
 export default function SplashScreen() {
     const bar = {
@@ -19,7 +19,7 @@ export default function SplashScreen() {
         <div
             role="status"
             aria-live="polite"
-            className="flex min-h-screen flex-col items-center justify-center gap-7 bg-gray-50 animate-splash-in dark:bg-gray-900"
+            className="flex min-h-screen flex-col items-center justify-center gap-7 bg-gray-50 dark:bg-gray-900"
         >
             <div className="flex flex-col items-center gap-4">
                 {/* The CareerPass mark — three ascending bars, breathing while we load. */}

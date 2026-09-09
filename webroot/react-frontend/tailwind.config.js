@@ -46,10 +46,6 @@ module.exports = {
                     '0%': { transform: 'translateX(-120%)' },
                     '100%': { transform: 'translateX(520%)' },
                 },
-                'splash-in': {
-                    from: { opacity: '0' },
-                    to: { opacity: '1' },
-                },
             },
             animation: {
                 pop: 'pop 0.35s ease-out',
@@ -57,7 +53,6 @@ module.exports = {
                 drift2: 'drift2 25s ease-in-out infinite alternate',
                 'bar-rise': 'bar-rise 1.1s ease-in-out infinite',
                 'loader-sweep': 'loader-sweep 1.2s ease-in-out infinite',
-                'splash-in': 'splash-in 0.3s ease-out 0.15s both',
             },
         },
     },
