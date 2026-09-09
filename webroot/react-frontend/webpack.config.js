@@ -11,7 +11,10 @@ module.exports = (env, argv) => {
         entry: './src/index.js',
         output: {
             path: path.resolve(__dirname, 'dist'),
-            filename: 'main.js',
+            // Content-hashed so every build gets a unique URL — a bare `main.js`
+            // was being served stale by browser/ISP/CDN caches after a deploy.
+            // HtmlWebpackPlugin injects the right <script> into index.html.
+            filename: argv.mode === 'production' ? 'main.[contenthash].js' : 'main.js',
             publicPath: '/',
             clean: true,
         },
