@@ -51,7 +51,7 @@ Styling is Tailwind CSS (utility classes in JSX; no Bootstrap/react-bootstrap). 
 
 ## Architecture
 
-This is a **CakePHP 5.1** application (PHP 8.1+) running under XAMPP. It acts as a JSON API backend consumed by a React frontend at `http://localhost:3000`. The backend is deployable via Docker (to Railway); the frontend deploys to Cloudflare Pages.
+This is a **CakePHP 5.1** application (PHP 8.1+) running under XAMPP. It acts as a JSON API backend consumed by a React frontend at `http://localhost:3000`. The backend is deployed via Docker to **Railway** (prod API `https://api.career-pass.org`); the frontend deploys to **Cloudflare Pages** (prod site `https://career-pass.org`, `www.` 301s to apex). Frontend and API are **same-site** in prod (both under `career-pass.org`). See **Deployment** for domains/DNS.
 
 ### API Design
 
@@ -81,7 +81,7 @@ Controllers in the `Api\` namespace live under `src/Controller/Api/`. Auth/accou
 
 ### CORS & Middleware
 
-CORS is handled by `CorsMiddleware` (`src/Middleware/CorsMiddleware.php`), added **first** in the `Application.php` middleware queue. It reads the allowed origin from the `FRONTEND_URL` env var (defaults to `http://localhost:3000`) and sets `Access-Control-Allow-Credentials: true`. Preflight `OPTIONS` requests are short-circuited inside the middleware before hitting routing.
+CORS is handled by `CorsMiddleware` (`src/Middleware/CorsMiddleware.php`), added **first** in the `Application.php` middleware queue. It reads **one** allowed origin from the `FRONTEND_URL` env var (dev default `http://localhost:3000`, prod `https://career-pass.org`) — echoed verbatim into `Access-Control-Allow-Origin`, so it must be scheme+host with **no trailing slash** and no path, and there is **no multi-origin support** (a second frontend domain would need a code change). Also sets `Access-Control-Allow-Credentials: true`. Preflight `OPTIONS` requests are short-circuited inside the middleware before hitting routing.
 
 CORS for every action, auth included, comes solely from `CorsMiddleware` — do not add per-action `Access-Control-*` headers (`login()` used to force `Access-Control-Allow-Origin: *`, which conflicts with credentialed CORS; that was removed).
 
@@ -113,7 +113,7 @@ The serialized `user` object **omits `user_pass` and `session_token`** (`$_hidde
 
 **Single-device sessions.** `login()` and `googleLogin()` go through `startSession()`, which rotates `users.session_token` to a fresh random value and stores it in the PHP session as `Auth.token`. `activeUserId()` (used by `session()`, `setupAccount()`, `updateAccount()`) re-reads `session_token` from the DB on every call and returns null — clearing the stale session — when it no longer matches `Auth.token`, i.e. the account has since logged in elsewhere. `session()` then returns `{ loggedIn: false, reason: 'signed_in_elsewhere' }`; the SPA (`index.js`) also re-checks on tab focus/visibility so a superseded device signs out promptly, and shows a banner on the landing page. Sessions predating the column (`session_token` null on both sides) are grandfathered until their next login.
 
-**Frontend auth state lives in `localStorage`** (key `skillsprint_user` — unchanged despite the SkillSprint→CareerPass rebrand; renaming it would silently log everyone out), not cookies — cross-origin session cookies between Cloudflare Pages and Railway were unreliable. `index.js` gates on the localStorage entry first, then confirms against `/api/session` with `withCredentials: true`, and re-polls every 25s while the tab is visible plus on focus/`visibilitychange`. The React route `/account-setup` (`src/pages/AccountSetup.js`) is reachable regardless of login state and self-redirects to `/` when there's no stored user.
+**Frontend auth state lives in `localStorage`** (key `skillsprint_user` — unchanged despite the SkillSprint→CareerPass rebrand; renaming it would silently log everyone out), not cookies. This dates from the old `*.pages.dev` ↔ `*.up.railway.app` setup where cross-**site** `SameSite=None` cookies were unreliable; now that both sides are under `career-pass.org` the session cookie *does* round-trip (login was verified working through it this way), but the localStorage gate is still the primary and `/api/session` is the confirmation. `index.js` gates on the localStorage entry first, then confirms against `/api/session` with `withCredentials: true`, and re-polls every 25s while the tab is visible plus on focus/`visibilitychange`. The React route `/account-setup` (`src/pages/AccountSetup.js`) is reachable regardless of login state and self-redirects to `/` when there's no stored user.
 
 **SPA route split.** `src/index.js` → `AppWrapper` picks the whole route tree by auth state: logged-out renders `src/App.js` (guest routes only: `/`, `/login`, `/explore`, `/pricing`, everything else `<Navigate to="/">`), logged-in renders `src/pages/Dashboard.js` (which owns the authenticated route tree). `/account-setup` is wired above the split so it renders in both states. So a new guest page goes in `App.js`, a new authenticated page in `Dashboard.js`. `src/pages/*` are the authenticated screens (Settings, Profile, Review, MyLibrary, …); `src/components/*` the shared/landing pieces. `src/old_file/` (`index_old.js`, `App_old.js`) is dead pre-rewrite code — don't edit it.
 
@@ -144,10 +144,12 @@ CREATE TABLE login_attempts (login_attempt_id INT UNSIGNED AUTO_INCREMENT PRIMAR
 ### Configuration
 
 - Backend env: `config/.env` (copy from `config/.env.example`). Key vars: `FRONTEND_URL`, `SECURITY_SALT`, `DATABASE_URL`, `GOOGLE_CLIENT_ID` (read by `googleLogin()`; **not** listed in `.env.example` — add it manually, and set it on Railway). Email is optional and prefers `BREVO_API_KEY` (Brevo HTTP API — the Railway path, since SMTP is blocked there) over `EMAIL_TRANSPORT_DEFAULT_URL` (an SMTP DSN like `smtp://user:pass@host:587`); set `EMAIL_FROM` with either. With none set, `sendMail()` logs the message instead of sending. None of these are in `.env.example` — add manually and set on Railway.
+- **Prod values on Railway:** `FRONTEND_URL=https://career-pass.org`, `EMAIL_FROM=no-reply@career-pass.org` (Brevo domain-authenticated: DKIM + DMARC records live in Cloudflare DNS for `career-pass.org`), `BREVO_API_KEY` set, `GOOGLE_CLIENT_ID` set. **Brevo gotcha:** the account has the *Authorized IPs* security feature enabled, which blocks API sends from unknown IPs — Railway's outbound IP changes on restart, so mail can silently stop until the new IP is authorized in Brevo → Settings → Security (or disable that feature).
+- **Google OAuth** (Cloud project `skillsprint-498012`, client "SkillSprint Web Client"): Authorized JavaScript origins must list every frontend origin — currently `https://career-pass.org`, `https://reviewer-app.pages.dev`, `http://localhost:3000`. A new frontend domain that isn't added here gets a silent `403` / "origin not allowed" on the Google button.
 - `config/app_local.php` (not committed — copy from `config/app_local.example.php`) sets the database connection under `Datasources.default`.
-- Frontend env: `webroot/react-frontend/.env` (copy from `.env.example`). Key vars: `REACT_APP_API_URL` (defaults to `http://localhost/reviewer_app` in `src/api.js`) and `REACT_APP_GOOGLE_CLIENT_ID` (must match the backend's `GOOGLE_CLIENT_ID`; set it on Cloudflare Pages).
+- Frontend env: local dev reads `webroot/react-frontend/.env` (copy from `.env.example`; `.env` is gitignored). **In prod the Cloudflare Pages project's env vars are the source of truth** (the Pages build injects them, not any committed file): `REACT_APP_API_URL=https://api.career-pass.org` and `REACT_APP_GOOGLE_CLIENT_ID` (must match the backend's `GOOGLE_CLIENT_ID`). `src/api.js` fallback is `http://localhost/reviewer_app`.
 - Test suite defaults to SQLite (`sqlite://127.0.0.1/tmp/tests.sqlite`, set in `config/app_local.php`) unless `DATABASE_TEST_URL` overrides it.
-- The default connection's `driver` is `App\Database\Driver\Mysql` (`src/Database/Driver/Mysql.php`), **not** CakePHP's core `Cake\Database\Driver\Mysql`. It's a one-line subclass that populates `RETRY_ERROR_CODES` (2002/2003/2006/2013) so CakePHP's built-in connection-retry actually fires — it absorbs the cold-start race against MySQL on Railway's scale-to-zero trial plan. Keep `config/app.php` pointed at the subclass.
+- The default connection's `driver` is `App\Database\Driver\Mysql` (`src/Database/Driver/Mysql.php`), **not** CakePHP's core `Cake\Database\Driver\Mysql`. It's a one-line subclass that populates `RETRY_ERROR_CODES` (2002/2003/2006/2013) so CakePHP's built-in connection-retry actually fires — it absorbs the MySQL-not-yet-reachable race during a Railway deploy/restart. Still worth keeping now that scale-to-zero is off. Keep `config/app.php` pointed at the subclass.
 - `Error.exceptionRenderer` is `App\Error\AppExceptionRenderer` (`src/Error/AppExceptionRenderer.php`), which catches the "database still asleep" case the retry driver couldn't ride out (a `MissingConnectionException` or a `[2002]/[2003]/[2006]/[2013]` / "Connection refused" / "server has gone away" message anywhere in the chain) and returns a friendly JSON `503` + `Retry-After: 5` instead of leaking a raw SQLSTATE string. All other errors fall through to `WebExceptionRenderer`.
 
 ### Testing
@@ -161,6 +163,18 @@ Tests live in `tests/TestCase/`, mirroring `src/`. Integration tests use `Integr
 
 ### Deployment
 
-The `Dockerfile` builds a `php:8.2-apache` image with `pdo_mysql`, sets `DocumentRoot` to `webroot/`, and installs Composer deps without dev packages. Intended for Railway (backend) + Cloudflare Pages (frontend) hosting.
+The `Dockerfile` builds a `php:8.2-apache` image with `pdo_mysql`, sets `DocumentRoot` to `webroot/`, and installs Composer deps without dev packages. `docker-start.sh` is the entrypoint (fixes the Apache MPM conflict → prefork, enables `mod_rewrite`). Railway hosts the backend + a MySQL service; Cloudflare Pages hosts the frontend.
 
-`railway.toml` sets `deploy.sleepApplication = true` (trial plan requires scale-to-zero when idle). This is the reason for the retrying MySQL driver above: the first request after an idle period races the app's cold start against MySQL becoming reachable on Railway's private network.
+**Railway.** `railway.toml` now sets `deploy.sleepApplication = false` (always-on — no scale-to-zero). This needs the project on a **paid plan** (Hobby+); on the trial's one-time credit, always-on drains it and then the project suspends. The MySQL service has its **own** sleep toggle in its Railway *Settings* (not in `railway.toml`) — that must be disabled too. `docker-start.sh` does **not** run migrations — apply new tables/columns by hand (see **Data Model**). The `AppExceptionRenderer` 503 + retrying MySQL driver still cover the brief window during a deploy/restart.
+
+**Cloudflare.** `career-pass.org` is on **Cloudflare Registrar** (zone already on Cloudflare nameservers — no registrar step). SSL/TLS mode: Full. DNS records:
+| Name | Type | Value | Proxy |
+|------|------|-------|-------|
+| `career-pass.org` (apex) | CNAME | `reviewer-app.pages.dev` | Proxied |
+| `www` | CNAME | `career-pass.org` | Proxied (a Redirect Rule 301s `www.*` → apex) |
+| `api` | CNAME | `<svc>.up.railway.app` (from Railway) | **DNS only** — Railway terminates TLS; proxying breaks its Let's Encrypt renewal |
+| `_railway-verify.api` | TXT | Railway domain-verification token | DNS only |
+| `brevo1._domainkey`, `brevo2._domainkey` | CNAME | `b{1,2}.career-pass-org.dkim.brevo.com` | DNS only |
+| `@`, `_dmarc` | TXT | Brevo code + DMARC policy | — |
+
+Cloudflare Pages: Git-connected to `alleth/reviewer-app` `master`, runs its own build (see **Frontend**). A push to `master` deploys + promotes; "Retry deployment" builds without promoting.
