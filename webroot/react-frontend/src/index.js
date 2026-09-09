@@ -5,6 +5,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import axios from 'axios';
 import Dashboard from './pages/Dashboard';
 import AccountSetup from './pages/AccountSetup';
+import SplashScreen from './components/ui/SplashScreen';
 import PrivacyPolicy from './pages/legal/PrivacyPolicy';
 import TermsOfService from './pages/legal/TermsOfService';
 import RefundPolicy from './pages/legal/RefundPolicy';
@@ -82,11 +83,7 @@ function AppWrapper() {
     }, []);
 
     if (isLoggedIn === null) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-gray-50 text-sm text-gray-500 dark:bg-gray-900 dark:text-gray-400">
-                Loading...
-            </div>
-        );
+        return <SplashScreen />;
     }
 
     return (

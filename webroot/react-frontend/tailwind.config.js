@@ -37,11 +37,27 @@ module.exports = {
                     '50%': { transform: 'translate(-200px, 100px)' },
                     '75%': { transform: 'translate(50px, -50px)' },
                 },
+                // Splash screen: the logo bars breathe like an equalizer.
+                'bar-rise': {
+                    '0%, 100%': { transform: 'skewX(-14deg) scaleY(0.7)' },
+                    '50%': { transform: 'skewX(-14deg) scaleY(1)' },
+                },
+                'loader-sweep': {
+                    '0%': { transform: 'translateX(-120%)' },
+                    '100%': { transform: 'translateX(520%)' },
+                },
+                'splash-in': {
+                    from: { opacity: '0' },
+                    to: { opacity: '1' },
+                },
             },
             animation: {
                 pop: 'pop 0.35s ease-out',
                 drift1: 'drift1 20s ease-in-out infinite alternate',
                 drift2: 'drift2 25s ease-in-out infinite alternate',
+                'bar-rise': 'bar-rise 1.1s ease-in-out infinite',
+                'loader-sweep': 'loader-sweep 1.2s ease-in-out infinite',
+                'splash-in': 'splash-in 0.3s ease-out 0.15s both',
             },
         },
     },
