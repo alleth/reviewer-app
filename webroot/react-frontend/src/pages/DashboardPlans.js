@@ -1,30 +1,56 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FaCircleCheck } from 'react-icons/fa6';
 import { PLANS } from '../plans';
 import { getPurchases } from '../reviewers';
+import { startCheckout } from '../api';
 
 const peso = (n) => `₱${Number.isInteger(n) ? n.toLocaleString('en-PH') : n.toFixed(2)}`;
 
+// Only reviewer for now — passes are per-reviewer (see src/Payment/Plans.php).
+const REVIEWER = 'civil-service';
+
 /**
- * In-app view of the CareerPass passes — for a logged-in user to extend or
+ * In-app view of the CareerPass passes — for a logged-in user to buy, extend or
  * switch their access. Same data as the public pricing page (src/plans.js).
  */
 export default function DashboardPlans({ user }) {
-    // Backend doesn't report the active plan yet; when it does, set this from
-    // the user's current purchase so the matching card shows "Current".
-    const currentPlanId = getPurchases(user)[0]?.planId || null;
+    const current = getPurchases(user).find((p) => p.reviewer === REVIEWER) || null;
+    const currentPlanId = current?.planId || null;
+
+    const [busyPlan, setBusyPlan] = useState(null);
+    const [error, setError] = useState('');
+
+    const buy = async (planId) => {
+        setError('');
+        setBusyPlan(planId);
+        try {
+            await startCheckout(REVIEWER, planId); // redirects on success
+        } catch (e) {
+            setError(e.userMessage || 'Could not start checkout. Please try again.');
+            setBusyPlan(null);
+        }
+    };
 
     return (
         <section>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Plans</h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Extend or switch your access. One-time payment, no subscription — nothing renews on its own.
+                {current
+                    ? 'Extend or switch your access. One-time payment — nothing renews on its own.'
+                    : 'Get a pass to unlock the reviewer. One-time payment, no subscription.'}
             </p>
+
+            {error && (
+                <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                    {error}
+                </p>
+            )}
 
             <div className="mt-6 grid gap-4 sm:grid-cols-3">
                 {PLANS.map((plan) => {
                     const isCurrent = currentPlanId === plan.id;
+                    const busy = busyPlan === plan.id;
                     return (
                         <div
                             key={plan.id}
@@ -62,9 +88,17 @@ export default function DashboardPlans({ user }) {
                             <div className="mt-auto pt-5">
                                 <button
                                     type="button"
+                                    disabled={busy || busyPlan !== null}
+                                    onClick={() => buy(plan.id)}
                                     className={`w-full ${isCurrent ? 'btn-outline' : 'btn-primary'}`}
                                 >
-                                    {isCurrent ? 'Extend this pass' : 'Switch to this'}
+                                    {busy
+                                        ? 'Redirecting…'
+                                        : isCurrent
+                                            ? 'Extend this pass'
+                                            : current
+                                                ? 'Switch to this'
+                                                : `Get ${plan.name}`}
                                 </button>
                             </div>
                         </div>

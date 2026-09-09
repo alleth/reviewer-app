@@ -19,4 +19,31 @@ export const api = axios.create({
     headers: { 'X-Requested-With': 'XMLHttpRequest' },
 });
 
+/**
+ * Starts a Xendit checkout for one access pass and redirects the browser to the
+ * hosted invoice page. Throws (with a `.userMessage`) if the invoice can't be
+ * created so the caller can re-enable its button and show the error.
+ */
+export async function startCheckout(reviewer, planId) {
+    try {
+        const res = await api.post('/api/checkout', { reviewer, plan_id: planId });
+        if (res.data?.invoice_url) {
+            window.location.assign(res.data.invoice_url);
+            return;
+        }
+        throw new Error(res.data?.message || 'Could not start checkout.');
+    } catch (err) {
+        const e = new Error(
+            err.response?.data?.message || err.message || 'Could not start checkout.',
+        );
+        e.userMessage = e.message;
+        throw e;
+    }
+}
+
+/** The logged-in user's active access passes (post-checkout poll on /checkout/success). */
+export function fetchPurchases() {
+    return api.get('/api/purchases').then((res) => res.data?.purchases || []);
+}
+
 export default API_URL;

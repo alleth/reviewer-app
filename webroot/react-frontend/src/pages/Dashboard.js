@@ -8,6 +8,7 @@ import DashboardPlans from './DashboardPlans';
 import Review from './Review';
 import Settings from './Settings';
 import Pricing from './Pricing';
+import { CheckoutSuccess, CheckoutCancel } from './Checkout';
 
 function readUser() {
     try {
@@ -45,6 +46,8 @@ function DashboardShell({ user }) {
                             <Route path="/library" element={<MyLibrary user={user} />} />
                             <Route path="/dashboard" element={<DashboardHome user={user} />} />
                             <Route path="/plans" element={<DashboardPlans user={user} />} />
+                            <Route path="/checkout/success" element={<CheckoutSuccess />} />
+                            <Route path="/checkout/cancel" element={<CheckoutCancel />} />
                             <Route path="/settings" element={<Settings />} />
                             <Route path="/review/:reviewer" element={<Review user={user} />} />
                             <Route path="*" element={<ComingSoon />} />
@@ -61,8 +64,9 @@ export default function Dashboard() {
 
     return (
         <Routes>
-            {/* Full-bleed pricing page stays reachable while logged in. */}
-            <Route path="/pricing" element={<Pricing />} />
+            {/* Full-bleed pricing page stays reachable while logged in — pass `user`
+                so its plan buttons start checkout instead of the signup modal. */}
+            <Route path="/pricing" element={<Pricing user={user} />} />
             <Route path="/*" element={<DashboardShell user={user} />} />
         </Routes>
     );

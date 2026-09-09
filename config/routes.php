@@ -18,6 +18,11 @@ return function (RouteBuilder $routes): void {
     $routes->connect('/api/password/reset', ['controller' => 'Users', 'action' => 'resetPassword']);
     $routes->connect('/api/password/change', ['controller' => 'Users', 'action' => 'changePassword']);
 
+    // Payments (PaymentsController in root namespace — manual auth like Users)
+    $routes->connect('/api/checkout', ['controller' => 'Payments', 'action' => 'checkout']);
+    $routes->connect('/api/purchases', ['controller' => 'Payments', 'action' => 'myPasses']);
+    $routes->connect('/api/xendit/webhook', ['controller' => 'Payments', 'action' => 'webhook']);
+
     // API resource routes (controllers in App\Controller\Api namespace)
     $routes->prefix('api', function (RouteBuilder $builder): void {
         // Custom action must be defined before resources() to avoid 'practice' being matched as an ID

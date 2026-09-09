@@ -388,7 +388,7 @@ class UsersController extends AppController
                     }
                     $this->recordLoginEvent((int)$user->user_id);
                     $this->startSession($user);
-                    $response = ['success' => true, 'user' => $user];
+                    $response = ['success' => true, 'user' => $this->withPurchases($user)];
                 }
             } elseif ($user && $user->user_pass === null) {
                 // Google-only account: no password was ever set for it. Give the frontend
@@ -503,7 +503,11 @@ class UsersController extends AppController
 
             return $this->response
                 ->withType('application/json')
-                ->withStringBody(json_encode(['success' => true, 'user' => $user, 'isNewUser' => $isNewUser]));
+                ->withStringBody(json_encode([
+                    'success' => true,
+                    'user' => $this->withPurchases($user),
+                    'isNewUser' => $isNewUser,
+                ]));
         } catch (Throwable $e) {
             return $this->serverError($e);
         }
@@ -675,6 +679,9 @@ class UsersController extends AppController
 
         $userId = $this->activeUserId();
         $user = $userId ? $session->read('Auth.User') : null;
+        if ($user) {
+            $this->withPurchases($user);
+        }
         // Set when this device was signed out because the account signed in
         // somewhere else — lets the SPA show a message.
         $supersededElsewhere = $wasLoggedIn && $user === null;
@@ -740,6 +747,17 @@ class UsersController extends AppController
             ->withStatus($status)
             ->withType('application/json')
             ->withStringBody(json_encode($body));
+    }
+
+    /**
+     * Attaches the user's active access passes as `purchases` on the entity so
+     * the SPA (getPurchases() in reviewers.js) has them without a separate call.
+     */
+    private function withPurchases(User $user): User
+    {
+        $user->set('purchases', $this->fetchTable('Passes')->activeForUser((int)$user->user_id));
+
+        return $user;
     }
 
     /**

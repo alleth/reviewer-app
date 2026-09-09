@@ -15,6 +15,9 @@ import HandNote from '../components/ui/HandNote';
 import SiteFooter from '../components/SiteFooter';
 import LoginPage from './LoginPage';
 import { PLANS, COMPARISON } from '../plans';
+import { startCheckout } from '../api';
+
+const REVIEWER = 'civil-service';
 
 const reassurances = [
     { Icon: FaArrowRotateLeft, title: 'One-time payment', body: 'Pay once for the period you pick. No recurring subscription, nothing auto-renews.' },
@@ -44,7 +47,7 @@ const faqs = [
 const peso = (n) => `₱${Number.isInteger(n) ? n.toLocaleString('en-PH') : n.toFixed(2)}`;
 const perDay = (n, days) => `≈ ₱${(n / days).toFixed(2)} / day`;
 
-function PlanCard({ plan, selected, anySelected, onSelect, onContinue }) {
+function PlanCard({ plan, selected, anySelected, busy, onSelect, onContinue }) {
     const isSelected = selected === plan.id;
 
     const handleKey = (e) => {
@@ -104,25 +107,45 @@ function PlanCard({ plan, selected, anySelected, onSelect, onContinue }) {
             <div className="mt-auto pt-6">
                 <button
                     type="button"
+                    disabled={busy}
                     onClick={(e) => { e.stopPropagation(); onContinue(); }}
                     className={`w-full ${isSelected || plan.highlight ? 'btn-primary' : 'btn-outline'}`}
                 >
-                    {isSelected ? `Get ${plan.name}` : 'Choose this plan'}
+                    {busy ? 'Redirecting…' : isSelected ? `Get ${plan.name}` : 'Choose this plan'}
                 </button>
             </div>
         </div>
     );
 }
 
-export default function Pricing() {
+export default function Pricing({ user = null }) {
     const [showMenu, setShowMenu] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [authMode, setAuthMode] = useState('signup');
     const [selected, setSelected] = useState('30-day');
+    const [busyPlan, setBusyPlan] = useState(null);
+    const [checkoutError, setCheckoutError] = useState('');
 
     const openModal = (mode) => {
         setAuthMode(mode);
         setShowModal(true);
+    };
+
+    // Logged in → straight to Xendit checkout. Logged out → sign up first
+    // (they can buy from /plans once they have an account).
+    const handleContinue = async (planId) => {
+        if (!user) {
+            openModal('signup');
+            return;
+        }
+        setCheckoutError('');
+        setBusyPlan(planId);
+        try {
+            await startCheckout(REVIEWER, planId); // redirects on success
+        } catch (e) {
+            setCheckoutError(e.userMessage || 'Could not start checkout. Please try again.');
+            setBusyPlan(null);
+        }
     };
 
     return (
@@ -167,6 +190,12 @@ export default function Pricing() {
                     />
                 </div>
 
+                {checkoutError && (
+                    <p className="mx-auto mt-6 max-w-md rounded-lg bg-red-50 px-3 py-2 text-center text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                        {checkoutError}
+                    </p>
+                )}
+
                 {/* Plan cards */}
                 <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-3">
                     {PLANS.map((plan) => (
@@ -175,8 +204,9 @@ export default function Pricing() {
                             plan={plan}
                             selected={selected}
                             anySelected={Boolean(selected)}
+                            busy={busyPlan === plan.id}
                             onSelect={setSelected}
-                            onContinue={() => openModal('signup')}
+                            onContinue={() => handleContinue(plan.id)}
                         />
                     ))}
                 </div>

@@ -34,6 +34,13 @@ function AppWrapper() {
                     if (cancelled) return;
                     if (res.data.loggedIn) {
                         wasLoggedIn = true;
+                        // Keep the stored user fresh (purchases, profile edits) so
+                        // every screen reads current data, not just what login set.
+                        try {
+                            if (res.data.user) {
+                                localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));
+                            }
+                        } catch (e) { /* ignore */ }
                         setIsLoggedIn(true);
                         return;
                     }

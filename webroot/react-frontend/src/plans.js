@@ -1,8 +1,12 @@
 /**
- * Single source of truth for the CareerPass access passes. Used by the Pricing
- * page; import from here rather than re-declaring prices per component.
+ * Display copy for the CareerPass access passes. Used by the Pricing / Plans
+ * pages; import from here rather than re-declaring prices per component.
  *
  * These are one-time passes for a fixed period — not recurring subscriptions.
+ *
+ * The server has its own copy in `src/Payment/Plans.php` and always computes the
+ * checkout amount from there — keep `id` / `name` / `days` / `price` in sync
+ * between the two files.
  */
 export const PLANS = [
     {
