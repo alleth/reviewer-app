@@ -31,6 +31,11 @@ bin/cake migrations migrate
 # Code generation (bake)
 bin/cake bake
 
+# Bulk-import reviewer content from a CSV (template: resources/questions-template.csv)
+bin/cake import_questions path/to/questions.csv --dry-run   # validate only
+bin/cake import_questions path/to/questions.csv             # append (skips exact dupes)
+bin/cake import_questions path/to/questions.csv --fresh --force   # wipe questions+choices first
+
 # Built-in dev server (alternative to XAMPP)
 bin/cake server -p 8765
 ```
@@ -146,6 +151,8 @@ All tables use non-standard primary keys (not `id`):
 - **`topics`** — PK: `topic_id`. Fields: `name` (max 100), `description`. `hasMany` Questions.
 - **`questions`** — PK: `question_id`. Fields: `topic_id` (FK → topics, CASCADE delete), `question_text`, `difficulty` (1=easy/2=medium/3=hard, constants on `QuestionsTable`), `explanation`. `belongsTo` Topics, `hasMany` Choices (sorted by `sort_order ASC`).
 - **`choices`** — PK: `choice_id`. Fields: `question_id` (FK → questions, CASCADE delete), `choice_text`, `is_correct` (boolean), `sort_order`. `belongsTo` Questions.
+
+Content is loaded with **`bin/cake import_questions <file.csv>`** (`src/Command/ImportQuestionsCommand.php`): one row per question — `topic, question, difficulty (easy/medium/hard), explanation, choice_a…choice_e, answer (letter)`. Topics are created on demand; a row whose `(topic, question)` already exists is skipped, so re-running a file is safe. Validation is all-or-nothing. Template + examples: `resources/questions-template.csv`. (The `/api/questions` endpoints are still unauthenticated and the `/practice` UI isn't built — separate follow-ups.)
 
 - **`auth_codes`** — PK: `auth_code_id`. Fields: `user_id` (FK → users, CASCADE), `purpose` (`'password_reset'`, `'set_password'`, `'login_challenge'`), `code_hash` (bcrypt of the 6-digit code, `$_hidden`), `expires`, `attempts`. One-time emailed codes; a row is deleted on use, expiry or after 5 bad guesses. `AuthCodesTable` / `AuthCode` entity.
 - **`login_events`** — PK: `login_event_id`. Fields: `user_id` (FK → users, CASCADE), `device_hash`, `created`. Backs the rapid device-switch guard (see Authentication → "Rapid device-switch guard"); a user's rows are deleted when a correct challenge code clears the guard. `LoginEventsTable` / `LoginEvent` entity.
