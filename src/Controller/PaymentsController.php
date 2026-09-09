@@ -184,6 +184,23 @@ class PaymentsController extends AppController
     }
 
     /**
+     * GET /api/billing/history — every pass the user has paid for (for the
+     * payment history + receipts in Settings).
+     */
+    public function history(): Response
+    {
+        $userId = $this->activeUserId();
+        if (!$userId) {
+            return $this->json(['success' => false, 'message' => 'Not logged in'], 401);
+        }
+
+        return $this->json([
+            'success' => true,
+            'purchases' => $this->fetchTable('Passes')->historyForUser($userId),
+        ])->withHeader('Cache-Control', 'no-store');
+    }
+
+    /**
      * @param array<string, mixed> $body
      */
     private function json(array $body, int $status = 200): Response

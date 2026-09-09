@@ -69,6 +69,7 @@ This is a **CakePHP 5.1** application (PHP 8.1+) running under XAMPP. It acts as
 | POST `/api/password/change` | `UsersController` | `changePassword` |
 | POST `/api/checkout` | `PaymentsController` | `checkout` |
 | GET `/api/purchases` | `PaymentsController` | `myPasses` |
+| GET `/api/billing/history` | `PaymentsController` | `history` |
 | POST `/api/xendit/webhook` | `PaymentsController` | `webhook` |
 | GET/POST `/api/topics` | `Api\TopicsController` | `index` / `add` |
 | GET/PUT/DELETE `/api/topics/:id` | `Api\TopicsController` | `view` / `edit` / `delete` |
@@ -125,6 +126,7 @@ Access passes (7 / 30 / 90 days, per **reviewer** — `civil-service` today) are
 - **`checkout()`** (`POST /api/checkout`, logged-in + AJAX gate) — body `{ reviewer, plan_id }`. Amount is taken from `App\Payment\Plans` (server-side price list; the frontend `src/plans.js` is display-only and must be kept in sync), never the client. Creates a `pending` `passes` row, calls Xendit for a hosted invoice, returns `{ invoice_url }` for the SPA to redirect to.
 - **`webhook()`** (`POST /api/xendit/webhook`, **no session** — only `hash_equals` on the `x-callback-token` header vs `XENDIT_WEBHOOK_TOKEN`) — on `PAID`/`SETTLED` marks the pass `paid` and sets `expires_at` = (existing active expiry for that reviewer, else now) + plan days, superseding the prior active pass so there's always **one active pass per (user, reviewer)**. Idempotent; always 200 except on a bad token.
 - **`myPasses()`** (`GET /api/purchases`, logged-in) — the user's active passes, used by the `/checkout/success` poll.
+- **`history()`** (`GET /api/billing/history`, logged-in) — every pass the user has paid for (`PassesTable::historyForUser()`). Backs the "Payment history" list in Settings and the printable receipt at `/billing/:reference` (`src/pages/Receipt.js`, full-bleed, `print:` variants; a payment confirmation, explicitly **not** a BIR Official Receipt).
 
 `session()` / `login()` / `googleLogin()` attach a **`purchases`** array to the returned user (`UsersController::withPurchases()` → `PassesTable::activeForUser()`), which is what `getPurchases(user)` in `reviewers.js` reads. `index.js` now rewrites `localStorage['skillsprint_user']` from every `/api/session` poll so passes stay current app-wide. Frontend: `startCheckout()` in `src/api.js`; `src/pages/Checkout.js` is the post-redirect success (polls, then opens the reviewer) / cancel pages, routed in `Dashboard.js`.
 

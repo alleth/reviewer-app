@@ -8,6 +8,7 @@ import DashboardPlans from './DashboardPlans';
 import Review from './Review';
 import Settings from './Settings';
 import Pricing from './Pricing';
+import Receipt from './Receipt';
 import { CheckoutSuccess, CheckoutCancel } from './Checkout';
 
 function readUser() {
@@ -67,6 +68,8 @@ export default function Dashboard() {
             {/* Full-bleed pricing page stays reachable while logged in — pass `user`
                 so its plan buttons start checkout instead of the signup modal. */}
             <Route path="/pricing" element={<Pricing user={user} />} />
+            {/* Receipt is full-bleed so it prints without the dashboard chrome. */}
+            <Route path="/billing/:reference" element={<Receipt user={user} />} />
             <Route path="/*" element={<DashboardShell user={user} />} />
         </Routes>
     );

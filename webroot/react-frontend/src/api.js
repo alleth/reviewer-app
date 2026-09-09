@@ -46,4 +46,9 @@ export function fetchPurchases() {
     return api.get('/api/purchases').then((res) => res.data?.purchases || []);
 }
 
+/** Every pass the user has paid for — payment history + receipts in Settings. */
+export function fetchBillingHistory() {
+    return api.get('/api/billing/history').then((res) => res.data?.purchases || []);
+}
+
 export default API_URL;

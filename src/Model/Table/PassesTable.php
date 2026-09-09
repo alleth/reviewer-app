@@ -71,6 +71,42 @@ class PassesTable extends Table
     }
 
     /**
+     * Every pass the user has actually paid for (any status, `paid_at` set),
+     * newest first — backs the payment history / receipts in Settings.
+     *
+     * @param int $userId User id.
+     * @return array<int, array<string, mixed>>
+     */
+    public function historyForUser(int $userId): array
+    {
+        $rows = $this->find()
+            ->where(['user_id' => $userId, 'paid_at IS NOT' => null])
+            ->orderBy(['paid_at' => 'DESC'])
+            ->all();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $plan = Plans::get((string)$row->plan_id);
+            $out[] = [
+                'id' => (int)$row->pass_id,
+                'reference' => (string)$row->external_id,
+                'invoiceId' => $row->xendit_invoice_id,
+                'reviewer' => (string)$row->reviewer,
+                'plan' => $plan['name'] ?? (string)$row->plan_id,
+                'planId' => (string)$row->plan_id,
+                'days' => $plan['days'] ?? null,
+                'amount' => (string)$row->amount,
+                'currency' => (string)$row->currency,
+                'status' => (string)$row->status,
+                'purchasedAt' => $row->paid_at?->toIso8601String(),
+                'expiresAt' => $row->expires_at?->toIso8601String(),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * The one active `paid` pass for ($userId, $reviewer), or null. Used by the
      * webhook to extend an existing window instead of stacking a second card.
      *

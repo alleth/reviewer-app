@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
     FaCircleCheck,
@@ -8,8 +8,63 @@ import {
     FaUser,
     FaLock,
 } from 'react-icons/fa6';
-import { api } from '../api';
+import { api, fetchBillingHistory } from '../api';
 import { getPurchases, daysLeft } from '../reviewers';
+
+const peso = (amount, currency = 'PHP') =>
+    `${currency === 'PHP' ? '₱' : ''}${Number(amount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const shortDate = (iso) => {
+    if (!iso) return '—';
+    try {
+        return new Date(iso).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch (e) {
+        return iso;
+    }
+};
+
+function PaymentHistory() {
+    const [rows, setRows] = useState(undefined); // undefined = loading
+
+    useEffect(() => {
+        let cancelled = false;
+        fetchBillingHistory()
+            .then((list) => { if (!cancelled) setRows(list); })
+            .catch(() => { if (!cancelled) setRows([]); });
+        return () => { cancelled = true; };
+    }, []);
+
+    if (rows === undefined) {
+        return <p className="mt-6 text-sm text-gray-400 dark:text-gray-500">Loading payment history…</p>;
+    }
+    if (rows.length === 0) {
+        return <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">No payments yet.</p>;
+    }
+
+    return (
+        <div className="mt-6">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Payment history</h3>
+            <ul className="mt-2 divide-y divide-gray-100 dark:divide-gray-800">
+                {rows.map((r) => (
+                    <li key={r.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                        <div className="min-w-0">
+                            <p className="truncate font-medium text-gray-900 dark:text-gray-100">{r.plan}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {shortDate(r.purchasedAt)} · {peso(r.amount, r.currency)}
+                            </p>
+                        </div>
+                        <Link
+                            to={`/billing/${r.reference}`}
+                            className="shrink-0 text-sm font-medium text-brand-dark hover:underline dark:text-brand"
+                        >
+                            Receipt
+                        </Link>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+}
 
 function readUser() {
     try {
@@ -284,6 +339,8 @@ export default function Settings() {
                             </Link>
                         </div>
                     )}
+
+                    <PaymentHistory />
                 </Section>
 
                 {/* Devices */}
