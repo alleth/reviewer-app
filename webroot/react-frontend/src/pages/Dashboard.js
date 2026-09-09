@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate, Link } from 'react-router-dom';
 import TopNavbar from '../components/TopNavbar';
 import DashboardSidebar from '../components/DashboardSidebar';
+import SiteFooter from '../components/SiteFooter';
 import DashboardHome from './DashboardHome';
 import MyLibrary from './MyLibrary';
 import DashboardPlans from './DashboardPlans';
@@ -35,10 +36,10 @@ function ComingSoon() {
 
 function DashboardShell({ user }) {
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-900">
             <TopNavbar userName={user?.fname || user?.user_name} />
             {/* Centered container keeps the left/right margins; sidebar lives inside it. */}
-            <div className="mx-auto max-w-6xl px-4 pb-16 pt-24">
+            <div className="mx-auto w-full max-w-6xl flex-1 px-4 pb-12 pt-24">
                 <div className="flex flex-col gap-6 lg:flex-row lg:gap-10">
                     <DashboardSidebar />
                     <main className="min-w-0 flex-1">
@@ -56,6 +57,7 @@ function DashboardShell({ user }) {
                     </main>
                 </div>
             </div>
+            <SiteFooter />
         </div>
     );
 }
