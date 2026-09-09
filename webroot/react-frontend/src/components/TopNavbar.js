@@ -32,9 +32,9 @@ const TopNavbar = ({ userName }) => {
     return (
         <nav className="fixed top-0 z-30 w-full border-b border-gray-200 bg-gray-50 px-4 py-2 shadow-sm dark:border-gray-700 dark:bg-gray-900">
             <div className="mx-auto flex max-w-6xl items-center justify-between">
-                <a href="/" className="mr-8 flex items-center" style={{ gap: '7px' }}>
-                    <Logo size={33} />
-                    <span style={{ fontSize: 25, fontWeight: 700, letterSpacing: '-0.035em', color: '#00C4A7' }}>
+                <a href="/" className="mr-8 flex items-center" style={{ gap: '6px' }}>
+                    <Logo size={24} />
+                    <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.03em', color: '#00C4A7' }}>
                         CareerPass
                     </span>
                 </a>
