@@ -9,6 +9,7 @@ import DashboardPlans from './DashboardPlans';
 import Review from './Review';
 import TopicReview from './TopicReview';
 import Practice from './Practice';
+import MockExams from './MockExams';
 import Settings from './Settings';
 import Pricing from './Pricing';
 import Receipt from './Receipt';
@@ -23,7 +24,7 @@ function readUser() {
     }
 }
 
-/** Placeholder for reviewer areas that aren't built yet (practice, mock exams). */
+/** Placeholder for reviewer areas that aren't built yet at all. */
 function ComingSoon() {
     return (
         <div className="card mx-auto mt-6 max-w-lg p-8 text-center">
@@ -56,6 +57,7 @@ function DashboardShell({ user }) {
                             <Route path="/review/:reviewer" element={<Review user={user} />} />
                             <Route path="/review/:reviewer/topics/:topicId" element={<TopicReview user={user} />} />
                             <Route path="/practice" element={<Practice user={user} />} />
+                            <Route path="/mock-exams" element={<MockExams user={user} />} />
                             <Route path="*" element={<ComingSoon />} />
                         </Routes>
                     </main>

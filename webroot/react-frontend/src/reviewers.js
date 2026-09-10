@@ -19,9 +19,12 @@ export const REVIEWERS = {
 };
 
 /**
- * A user's purchases. The backend doesn't send these yet, so this returns []
- * for real accounts — every screen degrades to an empty / "get a pass" state.
- * Expected shape once wired: { id, reviewer, plan, planId, purchasedAt, expiresAt }
+ * A user's active passes, as attached by the backend (`PassesTable::activeForUser()`
+ * via `session()`/`login()`/`googleLogin()`). Falls back to [] for a logged-out
+ * user or a stale/malformed localStorage entry — every screen degrades to an
+ * empty / "get a pass" state. Shape per entry: { id, reviewer, plan, planId,
+ * purchasedAt, expiresAt } — `plan` is the display name (e.g. "7-Day Access"),
+ * `planId` the raw id ("7-day"/"30-day"/"90-day").
  */
 export function getPurchases(user) {
     return Array.isArray(user?.purchases) ? user.purchases : [];
