@@ -13,9 +13,11 @@ use Migrations\AbstractMigration;
  *
  *   bin/cake migrations mark_migrated --target 20260528000000 --only
  *
- * Mirrors the real table exactly as of 2026-09-10 (including that only
- * `google_id` has a DB-level unique constraint — `email`/`user_name`
- * uniqueness is app-level only, via UsersTable's build rules). No
+ * Mirrors production's real table as of 2026-09-10 — confirmed directly
+ * against Railway, not assumed from a local copy (local had drifted: signed
+ * `user_id` instead of unsigned, nullable/shorter fname/lname/email/user_name
+ * with no DB-level uniqueness on email/user_name, narrower google_id — local
+ * was fixed to match production rather than the other way around). No
  * `created`/`modified`: UsersTable doesn't use the Timestamp behavior.
  */
 class CreateUsers extends AbstractMigration
@@ -26,15 +28,17 @@ class CreateUsers extends AbstractMigration
     public function change(): void
     {
         $this->table('users', ['id' => false, 'primary_key' => ['user_id']])
-            ->addColumn('user_id', 'integer', ['identity' => true])
-            ->addColumn('fname', 'string', ['limit' => 45, 'null' => true, 'default' => null])
-            ->addColumn('lname', 'string', ['limit' => 45, 'null' => true, 'default' => null])
-            ->addColumn('email', 'string', ['limit' => 35, 'null' => true, 'default' => null])
-            ->addColumn('user_name', 'string', ['limit' => 35, 'null' => true, 'default' => null])
+            ->addColumn('user_id', 'integer', ['identity' => true, 'signed' => false])
+            ->addColumn('fname', 'string', ['limit' => 50])
+            ->addColumn('lname', 'string', ['limit' => 50])
+            ->addColumn('email', 'string', ['limit' => 100])
+            ->addColumn('user_name', 'string', ['limit' => 50])
             ->addColumn('user_pass', 'string', ['limit' => 255, 'null' => true, 'default' => null])
-            ->addColumn('google_id', 'string', ['limit' => 64, 'null' => true, 'default' => null])
+            ->addColumn('google_id', 'string', ['limit' => 255, 'null' => true, 'default' => null])
             ->addColumn('session_token', 'string', ['limit' => 64, 'null' => true, 'default' => null])
-            ->addIndex(['google_id'], ['unique' => true, 'name' => 'uniq_google_id'])
+            ->addIndex(['user_name'], ['unique' => true, 'name' => 'users_user_name'])
+            ->addIndex(['email'], ['unique' => true, 'name' => 'users_email'])
+            ->addIndex(['google_id'], ['unique' => true, 'name' => 'users_google_id'])
             ->create();
     }
 }

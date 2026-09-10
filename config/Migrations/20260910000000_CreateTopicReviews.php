@@ -19,8 +19,7 @@ class CreateTopicReviews extends AbstractMigration
         $this->table('topic_reviews', ['id' => false, 'primary_key' => ['topic_review_id']])
             ->addColumn('topic_review_id', 'integer', ['identity' => true, 'signed' => false])
             ->addColumn('topic_id', 'integer', ['signed' => false])
-            // Signed (not unsigned) to match users.user_id, which is `int(11)` signed.
-            ->addColumn('author_id', 'integer', ['null' => true, 'default' => null])
+            ->addColumn('author_id', 'integer', ['signed' => false, 'null' => true, 'default' => null])
             ->addColumn('content', 'text', [])
             ->addColumn('created', 'datetime', ['null' => true, 'default' => null])
             ->addColumn('modified', 'datetime', ['null' => true, 'default' => null])
