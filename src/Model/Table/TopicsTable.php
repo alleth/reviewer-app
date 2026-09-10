@@ -21,6 +21,13 @@ class TopicsTable extends Table
         $this->hasMany('Questions', [
             'foreignKey' => 'topic_id',
         ]);
+
+        // Study/explainer write-up for the topic — one per topic in v1.
+        // Alias must match TopicReviewsTable for the table name to resolve;
+        // CakePHP still exposes it as the singular $topic->topic_review.
+        $this->hasOne('TopicReviews', [
+            'foreignKey' => 'topic_id',
+        ]);
     }
 
     public function validationDefault(Validator $validator): Validator

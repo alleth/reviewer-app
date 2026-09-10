@@ -23,7 +23,7 @@ class TopicsController extends AppController
 
     public function view(int $id): void
     {
-        $topic = $this->Topics->get($id, contain: ['Questions']);
+        $topic = $this->Topics->get($id, contain: ['Questions', 'TopicReviews']);
 
         $this->response = $this->response
             ->withType('application/json')

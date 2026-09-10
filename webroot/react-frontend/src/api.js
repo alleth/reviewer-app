@@ -56,6 +56,11 @@ export function fetchTopics() {
     return api.get('/api/topics').then((res) => res.data?.data || []);
 }
 
+/** One topic, with its study/explainer write-up (`topic_review`, null if not authored yet). */
+export function fetchTopic(topicId) {
+    return api.get(`/api/topics/${topicId}`).then((res) => res.data?.data);
+}
+
 /** A randomized practice set. `topicId` optional; `limit` 1–50. */
 export function fetchPractice({ topicId, limit = 20 } = {}) {
     const params = { limit };

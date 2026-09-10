@@ -1,17 +1,28 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { FaArrowRight, FaArrowLeft, FaBookOpen, FaClipboardCheck } from 'react-icons/fa6';
+import { fetchTopics } from '../api';
 import { REVIEWERS, getPurchases } from '../reviewers';
 
 /**
  * The "start reviewing" page for one reviewer — reached by clicking a card in
- * My Library. Lists the reviewer's topics and the ways to practice. Practice
- * links go to /practice (src/pages/Practice.js); mock exams aren't built yet.
+ * My Library. Lists the reviewer's topics (each opens its study/explainer
+ * page, src/pages/TopicReview.js — not a quiz) and the ways to practice.
+ * Practice links go to /practice (src/pages/Practice.js); mock exams aren't
+ * built yet.
  */
 export default function Review({ user }) {
     const { reviewer: reviewerId } = useParams();
     const reviewer = REVIEWERS[reviewerId];
     const owns = getPurchases(user).some((p) => p.reviewer === reviewerId);
+
+    // Topic cards need real topic_ids (to link into /topics/:topicId), so
+    // fetch them instead of using reviewer.topics (display names only).
+    const [topics, setTopics] = useState([]);
+    useEffect(() => {
+        if (!owns) return;
+        fetchTopics().catch(() => []).then((list) => setTopics(list || []));
+    }, [owns]);
 
     if (!reviewer) {
         return (
@@ -55,13 +66,13 @@ export default function Review({ user }) {
                 <FaBookOpen size={14} className="text-brand" /> Topics
             </h2>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                {reviewer.topics.map((topic) => (
+                {(topics.length ? topics : reviewer.topics.map((name) => ({ name }))).map((topic) => (
                     <Link
-                        key={topic}
-                        to={`/practice?topic=${encodeURIComponent(topic)}`}
+                        key={topic.topic_id ?? topic.name}
+                        to={topic.topic_id ? `/review/${reviewerId}/topics/${topic.topic_id}` : `/practice?topic=${encodeURIComponent(topic.name)}`}
                         className="card group flex items-center justify-between p-4 transition-colors hover:border-brand"
                     >
-                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{topic}</span>
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{topic.name}</span>
                         <FaArrowRight size={12} className="text-gray-300 transition-colors group-hover:text-brand dark:text-gray-600" />
                     </Link>
                 ))}
