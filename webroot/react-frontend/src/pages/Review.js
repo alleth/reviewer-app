@@ -70,7 +70,16 @@ export default function Review({ user }) {
                 <FaBookOpen size={14} className="text-brand" /> Topics
             </h2>
             {topics === null ? (
-                <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">Loading topics…</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {/* Skeleton — same count as the static topic list, so the grid is
+                        already roughly the right height once the real cards arrive. */}
+                    {(reviewer.topics || []).map((name) => (
+                        <div key={name} className="card flex animate-pulse items-center justify-between p-4">
+                            <div className="h-3.5 w-2/3 rounded bg-gray-200 dark:bg-gray-700" />
+                            <div className="h-3 w-3 rounded-full bg-gray-200 dark:bg-gray-700" />
+                        </div>
+                    ))}
+                </div>
             ) : (
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     {topics.map((topic) => (
