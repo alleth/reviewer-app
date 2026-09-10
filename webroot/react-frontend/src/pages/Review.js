@@ -17,11 +17,15 @@ export default function Review({ user }) {
     const owns = getPurchases(user).some((p) => p.reviewer === reviewerId);
 
     // Topic cards need real topic_ids (to link into /topics/:topicId), so
-    // fetch them instead of using reviewer.topics (display names only).
-    const [topics, setTopics] = useState([]);
+    // fetch them instead of using reviewer.topics (display names only). `null`
+    // means "still loading" — deliberately NOT the reviewer.topics fallback:
+    // that list isn't in the same order the API returns (alphabetical), so
+    // showing it first and swapping to the real order a moment later made the
+    // whole grid visibly reshuffle once the fetch resolved.
+    const [topics, setTopics] = useState(() => (owns ? null : (reviewer?.topics || []).map((name) => ({ name }))));
     useEffect(() => {
         if (!owns) return;
-        fetchTopics().catch(() => []).then((list) => setTopics(list || []));
+        fetchTopics().catch(() => []).then(setTopics);
     }, [owns]);
 
     if (!reviewer) {
@@ -65,18 +69,22 @@ export default function Review({ user }) {
             <h2 className="mt-8 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
                 <FaBookOpen size={14} className="text-brand" /> Topics
             </h2>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                {(topics.length ? topics : reviewer.topics.map((name) => ({ name }))).map((topic) => (
-                    <Link
-                        key={topic.topic_id ?? topic.name}
-                        to={topic.topic_id ? `/review/${reviewerId}/topics/${topic.topic_id}` : `/practice?topic=${encodeURIComponent(topic.name)}`}
-                        className="card group flex items-center justify-between p-4 transition-colors hover:border-brand"
-                    >
-                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{topic.name}</span>
-                        <FaArrowRight size={12} className="text-gray-300 transition-colors group-hover:text-brand dark:text-gray-600" />
-                    </Link>
-                ))}
-            </div>
+            {topics === null ? (
+                <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">Loading topics…</p>
+            ) : (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {topics.map((topic) => (
+                        <Link
+                            key={topic.topic_id ?? topic.name}
+                            to={topic.topic_id ? `/review/${reviewerId}/topics/${topic.topic_id}` : `/practice?topic=${encodeURIComponent(topic.name)}`}
+                            className="card group flex items-center justify-between p-4 transition-colors hover:border-brand"
+                        >
+                            <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{topic.name}</span>
+                            <FaArrowRight size={12} className="text-gray-300 transition-colors group-hover:text-brand dark:text-gray-600" />
+                        </Link>
+                    ))}
+                </div>
+            )}
 
             {/* Mock exams */}
             <h2 className="mt-8 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
