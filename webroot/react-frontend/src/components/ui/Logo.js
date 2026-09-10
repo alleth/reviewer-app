@@ -11,6 +11,9 @@ export default function Logo({ size = 24, className = '' }) {
         background: '#fff',
         borderRadius: '0.045em',
         transform: 'skewX(-14deg)',
+        WebkitPrintColorAdjust: 'exact',
+        printColorAdjust: 'exact',
+        colorAdjust: 'exact',
     };
 
     return (
@@ -23,6 +26,14 @@ export default function Logo({ size = 24, className = '' }) {
                 flexShrink: 0,
                 borderRadius: '0.18em',
                 background: '#00D1B2',
+                // Browsers drop background colors when printing by default (an
+                // ink-saving default) — without this the teal tile (and its bars,
+                // which are background-color too) just vanish on paper/PDF, e.g.
+                // on the printable receipt (Receipt.js). WebkitPrintColorAdjust
+                // covers Chrome/Safari, colorAdjust the older Firefox spelling.
+                WebkitPrintColorAdjust: 'exact',
+                printColorAdjust: 'exact',
+                colorAdjust: 'exact',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
