@@ -24,9 +24,11 @@ class PaymentsController extends AppController
     private const PAID_STATUSES = ['PAID', 'SETTLED'];
 
     /**
-     * POST /api/checkout — body { reviewer, plan_id }. Creates a pending pass +
-     * a Xendit hosted invoice and returns its `invoice_url` for the SPA to
-     * redirect to.
+     * POST /api/checkout — body { reviewer, plan_id }. Reuses a very-recent
+     * still-pending invoice for the same (user, reviewer, plan) if one exists
+     * (double-click / extra tab / retry guard); otherwise creates a pending
+     * pass + a Xendit hosted invoice. Returns `invoice_url` for the SPA to
+     * redirect to either way.
      */
     public function checkout(): Response
     {
@@ -54,8 +56,30 @@ class PaymentsController extends AppController
                 return $this->json(['success' => false, 'message' => 'Unknown plan.'], 422);
             }
 
-            $user = $this->fetchTable('Users')->get($userId);
             $passes = $this->fetchTable('Passes');
+
+            // Reuse a very-recent still-pending invoice for the same
+            // (user, reviewer, plan) instead of creating a second one — guards
+            // against a double-click, an extra tab, or a client-side retry.
+            // The window is short so a genuine repeat purchase later isn't
+            // blocked, and a paid/expired/superseded pass never matches
+            // `pending` so it can never accidentally short-circuit a new buy.
+            $recent = $passes->find()
+                ->where([
+                    'user_id' => $userId,
+                    'reviewer' => $reviewer,
+                    'plan_id' => $planId,
+                    'status' => 'pending',
+                    'invoice_url IS NOT' => null,
+                    'created >' => (new DateTime())->subMinutes(5),
+                ])
+                ->orderBy(['created' => 'DESC'])
+                ->first();
+            if ($recent !== null) {
+                return $this->json(['success' => true, 'invoice_url' => $recent->invoice_url]);
+            }
+
+            $user = $this->fetchTable('Users')->get($userId);
 
             $pass = $passes->newEntity([
                 'user_id' => $userId,
@@ -80,9 +104,10 @@ class PaymentsController extends AppController
                 'success_redirect_url' => $base . '/checkout/success?ref=' . $pass->external_id,
                 'failure_redirect_url' => $base . '/checkout/cancel',
                 'invoice_duration' => 86400,
-            ]);
+            ], $pass->external_id);
 
             $pass->xendit_invoice_id = (string)($invoice['id'] ?? '');
+            $pass->invoice_url = (string)($invoice['invoice_url'] ?? '');
             $passes->save($pass);
 
             return $this->json([

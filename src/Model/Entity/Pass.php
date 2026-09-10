@@ -16,6 +16,7 @@ use Cake\ORM\Entity;
  * @property string $currency
  * @property string $external_id
  * @property string|null $xendit_invoice_id
+ * @property string|null $invoice_url
  * @property string $status
  * @property \Cake\I18n\DateTime|null $paid_at
  * @property \Cake\I18n\DateTime|null $expires_at
@@ -35,6 +36,7 @@ class Pass extends Entity
         'currency' => true,
         'external_id' => true,
         'xendit_invoice_id' => true,
+        'invoice_url' => true,
         'status' => true,
         'paid_at' => true,
         'expires_at' => true,
