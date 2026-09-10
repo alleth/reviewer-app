@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FaCircleCheck } from 'react-icons/fa6';
 import { PLANS } from '../plans';
@@ -20,6 +20,23 @@ export default function DashboardPlans({ user }) {
 
     const [busyPlan, setBusyPlan] = useState(null);
     const [error, setError] = useState('');
+
+    // startCheckout() redirects the browser away (window.location.assign) —
+    // it never unmounts this page, just freezes it mid-navigation. Hitting
+    // the browser Back button restores that frozen snapshot from bfcache
+    // instead of re-running the page, so without this the button stays stuck
+    // on "Redirecting…" forever. `pageshow`'s `persisted` flag specifically
+    // means "restored from bfcache", so reset the busy state right then.
+    useEffect(() => {
+        const onPageShow = (e) => {
+            if (e.persisted) {
+                setBusyPlan(null);
+                setError('');
+            }
+        };
+        window.addEventListener('pageshow', onPageShow);
+        return () => window.removeEventListener('pageshow', onPageShow);
+    }, []);
 
     const buy = async (planId) => {
         setError('');
