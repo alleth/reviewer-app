@@ -22,7 +22,8 @@ class CreatePasses extends AbstractMigration
     {
         $this->table('passes', ['id' => false, 'primary_key' => ['pass_id']])
             ->addColumn('pass_id', 'integer', ['identity' => true, 'signed' => false])
-            ->addColumn('user_id', 'integer', ['signed' => false])
+            // Signed (not unsigned) to match users.user_id, which is `int(11)` signed.
+            ->addColumn('user_id', 'integer', [])
             ->addColumn('reviewer', 'string', ['limit' => 50])
             ->addColumn('plan_id', 'string', ['limit' => 20])
             ->addColumn('amount', 'decimal', ['precision' => 10, 'scale' => 2])

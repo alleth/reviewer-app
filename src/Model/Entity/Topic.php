@@ -12,6 +12,7 @@ use Cake\ORM\Entity;
  * @property \Cake\I18n\DateTime|null $created
  * @property \Cake\I18n\DateTime|null $modified
  * @property \App\Model\Entity\Question[] $questions
+ * @property \App\Model\Entity\TopicReview|null $topic_review
  */
 class Topic extends Entity
 {
@@ -19,5 +20,6 @@ class Topic extends Entity
         'name' => true,
         'description' => true,
         'questions' => true,
+        'topic_review' => true,
     ];
 }

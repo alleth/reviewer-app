@@ -16,7 +16,8 @@ class CreateAuthCodes extends AbstractMigration
     {
         $this->table('auth_codes', ['id' => false, 'primary_key' => ['auth_code_id']])
             ->addColumn('auth_code_id', 'integer', ['identity' => true, 'signed' => false])
-            ->addColumn('user_id', 'integer', ['signed' => false])
+            // Signed (not unsigned) to match users.user_id, which is `int(11)` signed.
+            ->addColumn('user_id', 'integer', [])
             ->addColumn('purpose', 'string', ['limit' => 30])
             ->addColumn('code_hash', 'string', ['limit' => 255])
             ->addColumn('expires', 'datetime', [])
@@ -28,7 +29,8 @@ class CreateAuthCodes extends AbstractMigration
 
         $this->table('login_events', ['id' => false, 'primary_key' => ['login_event_id']])
             ->addColumn('login_event_id', 'integer', ['identity' => true, 'signed' => false])
-            ->addColumn('user_id', 'integer', ['signed' => false])
+            // Signed (not unsigned) to match users.user_id, which is `int(11)` signed.
+            ->addColumn('user_id', 'integer', [])
             ->addColumn('device_hash', 'string', ['limit' => 64])
             ->addColumn('created', 'datetime', ['null' => true, 'default' => null])
             ->addIndex(['user_id', 'created'])
