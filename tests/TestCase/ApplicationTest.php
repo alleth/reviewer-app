@@ -17,6 +17,7 @@ declare(strict_types=1);
 namespace App\Test\TestCase;
 
 use App\Application;
+use App\Middleware\CorsMiddleware;
 use Cake\Core\Configure;
 use Cake\Error\Middleware\ErrorHandlerMiddleware;
 use Cake\Http\MiddlewareQueue;
@@ -67,6 +68,12 @@ class ApplicationTest extends TestCase
     /**
      * testMiddleware
      *
+     * CorsMiddleware is added first (before ErrorHandlerMiddleware) so preflight
+     * OPTIONS requests are short-circuited before routing — see CLAUDE.md
+     * "CORS & Middleware". No CsrfProtectionMiddleware: this app removed CSRF
+     * middleware entirely in favor of a per-action AJAX-header gate (see
+     * UsersController::requireAjaxHeader()).
+     *
      * @return void
      */
     public function testMiddleware()
@@ -76,10 +83,12 @@ class ApplicationTest extends TestCase
 
         $middleware = $app->middleware($middleware);
 
-        $this->assertInstanceOf(ErrorHandlerMiddleware::class, $middleware->current());
+        $this->assertInstanceOf(CorsMiddleware::class, $middleware->current());
         $middleware->seek(1);
-        $this->assertInstanceOf(AssetMiddleware::class, $middleware->current());
+        $this->assertInstanceOf(ErrorHandlerMiddleware::class, $middleware->current());
         $middleware->seek(2);
+        $this->assertInstanceOf(AssetMiddleware::class, $middleware->current());
+        $middleware->seek(3);
         $this->assertInstanceOf(RoutingMiddleware::class, $middleware->current());
     }
 }

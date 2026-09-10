@@ -17,7 +17,6 @@ declare(strict_types=1);
 namespace App\Test\TestCase\Controller;
 
 use Cake\Core\Configure;
-use Cake\TestSuite\Constraint\Response\StatusCode;
 use Cake\TestSuite\IntegrationTestTrait;
 use Cake\TestSuite\TestCase;
 
@@ -84,30 +83,8 @@ class PagesControllerTest extends TestCase
         $this->assertResponseContains('Forbidden');
     }
 
-    /**
-     * Test that CSRF protection is applied to page rendering.
-     *
-     * @return void
-     */
-    public function testCsrfAppliedError()
-    {
-        $this->post('/pages/home', ['hello' => 'world']);
-
-        $this->assertResponseCode(403);
-        $this->assertResponseContains('CSRF');
-    }
-
-    /**
-     * Test that CSRF protection is applied to page rendering.
-     *
-     * @return void
-     */
-    public function testCsrfAppliedOk()
-    {
-        $this->enableCsrfToken();
-        $this->post('/pages/home', ['hello' => 'world']);
-
-        $this->assertThat(403, $this->logicalNot(new StatusCode($this->_response)));
-        $this->assertResponseNotContains('CSRF');
-    }
+    // No CSRF tests here: this app has no CsrfProtectionMiddleware at all (removed
+    // to let the cross-origin SPA POST — see CLAUDE.md "CORS & Middleware"). CSRF
+    // is instead enforced per-action, only on state-changing auth/account routes,
+    // by UsersController::requireAjaxHeader() — PagesController has no analog.
 }
