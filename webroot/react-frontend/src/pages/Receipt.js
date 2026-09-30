@@ -24,6 +24,16 @@ const fmtDate = (iso) => {
     }
 };
 
+const VAT_RATE = 0.12;
+
+// Plan prices are VAT-inclusive, so split the charged amount back into its
+// net + 12% VAT parts. Done in centavos so the two always sum to the total.
+const vatBreakdown = (amount) => {
+    const total = Math.round(Number(amount) * 100);
+    const net = Math.round(total / (1 + VAT_RATE));
+    return { net: net / 100, tax: (total - net) / 100 };
+};
+
 /**
  * A printable payment receipt for one pass. Not a BIR Official Receipt — an
  * honest record of the transaction the buyer can print or save as PDF. Routed
@@ -44,7 +54,8 @@ export default function Receipt({ user }) {
         return () => { cancelled = true; };
     }, [reference]);
 
-    const buyerName = [user?.fname, user?.lname].filter(Boolean).join(' ') || user?.user_name || '—';
+    const vat = row ? vatBreakdown(row.amount) : null;
+    const buyerName =[user?.fname, user?.lname].filter(Boolean).join(' ') || user?.user_name || '—';
 
     return (
         <div className="min-h-screen bg-gray-50 py-8 dark:bg-gray-900 print:bg-white print:py-0">
@@ -78,7 +89,8 @@ export default function Receipt({ user }) {
                                 <span className="text-lg font-bold tracking-tight" style={{ color: '#00C4A7' }}>CareerPass</span>
                             </div>
                             <div className="text-right">
-                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Payment receipt</p>
+                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Invoice</p>
+                                <p className="font-mono text-xs text-gray-500 dark:text-gray-400">#{row.reference}</p>
                                 <p className="text-xs text-gray-500 dark:text-gray-400">
                                     {row.status === 'pending' ? 'Awaiting payment' : 'Paid'}
                                 </p>
@@ -113,7 +125,12 @@ export default function Receipt({ user }) {
                             </div>
                         </div>
 
-                        <div className="mt-4 flex items-center justify-between">
+                        <dl className="mt-4 space-y-1.5 text-sm text-gray-500 dark:text-gray-400">
+                            <div className="flex justify-between"><dt>VATable sales</dt><dd>{peso(vat.net, row.currency)}</dd></div>
+                            <div className="flex justify-between"><dt>VAT (12%)</dt><dd>{peso(vat.tax, row.currency)}</dd></div>
+                        </dl>
+
+                        <div className="mt-3 flex items-center justify-between border-t border-gray-200 pt-3 dark:border-gray-700">
                             <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Total paid</p>
                             <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
                                 {peso(row.amount, row.currency)} {row.currency}
