@@ -3,12 +3,11 @@ name: CI
 on:
   push:
     branches:
-      - '4.x'
-      - '4.next'
-      - '5.x'
+      - 'master'
+      - 'fix/**'
   pull_request:
     branches:
-      - '*'
+      - 'master'
   workflow_dispatch:
 
 permissions:
@@ -16,18 +15,15 @@ permissions:
 
 jobs:
   testsuite:
+    name: PHPUnit (PHP ${{ matrix.php-version }})
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['8.1', '8.3']
-        dependencies: ['highest']
-        include:
-          - php-version: '8.1'
-            dependencies: 'lowest'
-          - php-version: '8.4'
-            dependencies: 'highest'
-            composer-options: '--ignore-platform-req=php'
+        # 8.2 is what production runs (Dockerfile: php:8.2-apache), with the
+        # exact locked dependencies that ship. 8.3 is an early warning for the
+        # next PHP upgrade.
+        php-version: ['8.2', '8.3']
 
     steps:
     - uses: actions/checkout@v4
@@ -43,8 +39,7 @@ jobs:
     - name: Composer install
       uses: ramsey/composer-install@v3
       with:
-        dependency-versions: ${{ matrix.dependencies }}
-        composer-options: ${{ matrix.composer-options }}
+        dependency-versions: locked
 
     - name: Composer post install
       run: composer run-script post-install-cmd --no-interaction
@@ -60,23 +55,49 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        # Full history, so changed files can be diffed against master.
+        fetch-depth: 0
 
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
-        php-version: '8.1'
+        php-version: '8.2'
         extensions: mbstring, intl
         coverage: none
-        tools: cs2pr, phpstan:1.12
+        tools: cs2pr
 
     - name: Composer install
       uses: ramsey/composer-install@v3
+      with:
+        dependency-versions: locked
 
-    - name: Run PHP CodeSniffer
-      run: vendor/bin/phpcs --report=checkstyle | cs2pr
+    # The codebase predates this check and has existing style violations, so
+    # only the PHP files a push/PR changes are checked: new and edited files
+    # must be clean, and the backlog shrinks as files are touched.
+    - name: Run PHP CodeSniffer (changed files)
+      run: |
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          BASE="${{ github.event.pull_request.base.sha }}"
+        elif [ "${{ github.ref }}" = "refs/heads/master" ]; then
+          BASE="${{ github.event.before }}"
+        else
+          BASE="$(git merge-base origin/master HEAD)"
+        fi
+        if ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+          echo "No usable base commit (${BASE}); checking the last commit only."
+          BASE="HEAD~1"
+        fi
+        FILES=$(git diff --name-only --diff-filter=ACMR "$BASE" HEAD -- 'src/*.php' 'tests/*.php' 'src/**/*.php' 'tests/**/*.php' | sort -u)
+        if [ -z "$FILES" ]; then
+          echo "No changed PHP files to check."
+          exit 0
+        fi
+        echo "Checking:"; echo "$FILES"
+        vendor/bin/phpcs --report=checkstyle $FILES | cs2pr
 
-    - name: Run phpstan
+    - name: Run PHPStan
       if: always()
-      run: phpstan
+      run: composer stan -- --no-progress --error-format=github
       env:
         SECURITY_SALT: f76f1c8475585c46c6acd3ddcb8f5e0f15de524637bb4080a08c4afe7cfc9144
