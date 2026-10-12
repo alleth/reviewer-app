@@ -1,7 +1,15 @@
+includes:
+    # Pre-existing level-8 findings (2026-10-12, 108 entries — typing noise such as
+    # json_encode()'s string|false and CakePHP's magic table/entity properties).
+    # New code must pass clean; shrink this file as the baselined code is touched.
+    - phpstan-baseline.neon
+
 parameters:
     level: 8
     treatPhpDocTypesAsCertain: false
-    checkGenericClassInNonGenericObjectType: false
+    ignoreErrors:
+        -
+            identifier: missingType.generics
     bootstrapFiles:
         - config/bootstrap.php
     paths:

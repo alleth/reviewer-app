@@ -1,0 +1,136 @@
+parameters:
+	ignoreErrors:
+		-
+			message: "#^Call to an undefined method Cake\\\\Datasource\\\\ConnectionInterface\\:\\:transactional\\(\\)\\.$#"
+			count: 1
+			path: src/Command/ImportQuestionsCommand.php
+
+		-
+			message: "#^Strict comparison using \\=\\=\\= between array and null will always evaluate to false\\.$#"
+			count: 1
+			path: src/Command/ImportQuestionsCommand.php
+
+		-
+			message: "#^Strict comparison using \\=\\=\\= between array and null will always evaluate to false\\.$#"
+			count: 1
+			path: src/Command/ImportTopicReviewsCommand.php
+
+		-
+			message: "#^Method App\\\\Controller\\\\Api\\\\LoginController\\:\\:logout\\(\\) has no return type specified\\.$#"
+			count: 1
+			path: src/Controller/Api/LoginController.php
+
+		-
+			message: "#^Method App\\\\Controller\\\\Api\\\\LoginController\\:\\:options\\(\\) has no return type specified\\.$#"
+			count: 1
+			path: src/Controller/Api/LoginController.php
+
+		-
+			message: "#^Method App\\\\Controller\\\\Api\\\\LoginController\\:\\:options\\(\\) has parameter \\$args with no type specified\\.$#"
+			count: 1
+			path: src/Controller/Api/LoginController.php
+
+		-
+			message: "#^Method App\\\\Controller\\\\Api\\\\LoginController\\:\\:sessionCheck\\(\\) has no return type specified\\.$#"
+			count: 1
+			path: src/Controller/Api/LoginController.php
+
+		-
+			message: "#^Access to an undefined property App\\\\Controller\\\\Api\\\\QuestionsController\\:\\:\\$Questions\\.$#"
+			count: 14
+			path: src/Controller/Api/QuestionsController.php
+
+		-
+			message: "#^Parameter \\#1 \\$string of method Cake\\\\Http\\\\Response\\:\\:withStringBody\\(\\) expects string\\|null, string\\|false given\\.$#"
+			count: 9
+			path: src/Controller/Api/QuestionsController.php
+
+		-
+			message: "#^Access to an undefined property App\\\\Controller\\\\Api\\\\TopicsController\\:\\:\\$Topics\\.$#"
+			count: 11
+			path: src/Controller/Api/TopicsController.php
+
+		-
+			message: "#^Parameter \\#1 \\$string of method Cake\\\\Http\\\\Response\\:\\:withStringBody\\(\\) expects string\\|null, string\\|false given\\.$#"
+			count: 8
+			path: src/Controller/Api/TopicsController.php
+
+		-
+			message: "#^Access to an undefined property Cake\\\\Datasource\\\\EntityInterface\\:\\:\\$email\\.$#"
+			count: 1
+			path: src/Controller/PaymentsController.php
+
+		-
+			message: "#^Access to an undefined property Cake\\\\Datasource\\\\EntityInterface\\:\\:\\$external_id\\.$#"
+			count: 3
+			path: src/Controller/PaymentsController.php
+
+		-
+			message: "#^Access to an undefined property Cake\\\\Datasource\\\\EntityInterface\\:\\:\\$invoice_url\\.$#"
+			count: 1
+			path: src/Controller/PaymentsController.php
+
+		-
+			message: "#^Access to an undefined property Cake\\\\Datasource\\\\EntityInterface\\:\\:\\$xendit_invoice_id\\.$#"
+			count: 1
+			path: src/Controller/PaymentsController.php
+
+		-
+			message: "#^Call to an undefined method Cake\\\\ORM\\\\Table\\:\\:activeForReviewer\\(\\)\\.$#"
+			count: 1
+			path: src/Controller/PaymentsController.php
+
+		-
+			message: "#^Call to an undefined method Cake\\\\ORM\\\\Table\\:\\:activeForUser\\(\\)\\.$#"
+			count: 1
+			path: src/Controller/PaymentsController.php
+
+		-
+			message: "#^Call to an undefined method Cake\\\\ORM\\\\Table\\:\\:historyForUser\\(\\)\\.$#"
+			count: 1
+			path: src/Controller/PaymentsController.php
+
+		-
+			message: "#^Parameter \\#1 \\$string of method Cake\\\\Http\\\\Response\\:\\:withStringBody\\(\\) expects string\\|null, string\\|false given\\.$#"
+			count: 2
+			path: src/Controller/PaymentsController.php
+
+		-
+			message: "#^Access to an undefined property App\\\\Controller\\\\UsersController\\:\\:\\$Users\\.$#"
+			count: 23
+			path: src/Controller/UsersController.php
+
+		-
+			message: "#^Call to an undefined method Cake\\\\ORM\\\\Table\\:\\:activeForUser\\(\\)\\.$#"
+			count: 1
+			path: src/Controller/UsersController.php
+
+		-
+			message: "#^Method App\\\\Controller\\\\UsersController\\:\\:login\\(\\) has no return type specified\\.$#"
+			count: 1
+			path: src/Controller/UsersController.php
+
+		-
+			message: "#^Method App\\\\Controller\\\\UsersController\\:\\:register\\(\\) has no return type specified\\.$#"
+			count: 1
+			path: src/Controller/UsersController.php
+
+		-
+			message: "#^Parameter \\#1 \\$email of method Cake\\\\Mailer\\\\Message\\:\\:setFrom\\(\\) expects array\\|string, bool\\|float\\|int\\|string\\|null given\\.$#"
+			count: 1
+			path: src/Controller/UsersController.php
+
+		-
+			message: "#^Parameter \\#1 \\$string of method Cake\\\\Http\\\\Response\\:\\:withStringBody\\(\\) expects string\\|null, string\\|false given\\.$#"
+			count: 19
+			path: src/Controller/UsersController.php
+
+		-
+			message: "#^Property App\\\\Middleware\\\\CorsMiddleware\\:\\:\\$allowedOrigin \\(string\\) does not accept bool\\|float\\|int\\|string\\|null\\.$#"
+			count: 1
+			path: src/Middleware/CorsMiddleware.php
+
+		-
+			message: "#^PHPDoc tag @method has invalid value \\(\\\\App\\\\Model\\\\Entity\\\\AuthCode get\\(mixed \\$primaryKey, array\\|string \\$finder \\= 'all', \\.\\.\\.\\)\\)\\: Unexpected token \"\\)\", expected variable at offset 384$#"
+			count: 1
+			path: src/Model/Table/AuthCodesTable.php
