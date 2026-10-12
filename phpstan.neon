@@ -7,6 +7,9 @@ includes:
 parameters:
     level: 8
     treatPhpDocTypesAsCertain: false
+    # ORM calls like Table::save() hit the database, so two identical calls can
+    # return different results; don't let PHPStan assume the second repeats the first.
+    rememberPossiblyImpureFunctionValues: false
     ignoreErrors:
         -
             identifier: missingType.generics
