@@ -49,25 +49,32 @@ class UsersTable extends Table
      */
     public function validationDefault(Validator $validator): Validator
     {
+        // Max lengths mirror the real `users` columns (confirmed against Railway
+        // production): fname/lname/user_name VARCHAR(50), email VARCHAR(100).
+        // Names may be empty — Google accounts don't always carry a given or
+        // family name — but email and user_name identify the account and may not.
         $validator
             ->scalar('fname')
-            ->maxLength('fname', 45)
+            ->maxLength('fname', 50, 'First name must be 50 characters or fewer.')
             ->allowEmptyString('fname');
 
         $validator
             ->scalar('lname')
-            ->maxLength('lname', 45)
+            ->maxLength('lname', 50, 'Last name must be 50 characters or fewer.')
             ->allowEmptyString('lname');
 
         $validator
             ->scalar('email')
-            ->maxLength('email', 35)
-            ->allowEmptyString('email');
+            ->requirePresence('email', 'create', 'Email is required.')
+            ->notEmptyString('email', 'Email is required.')
+            ->maxLength('email', 100, 'Email must be 100 characters or fewer.')
+            ->email('email', false, 'Enter a valid email address.');
 
         $validator
             ->scalar('user_name')
-            ->maxLength('user_name', 35)
-            ->allowEmptyString('user_name');
+            ->requirePresence('user_name', 'create', 'Username is required.')
+            ->notEmptyString('user_name', 'Username is required.')
+            ->maxLength('user_name', 50, 'Username must be 50 characters or fewer.');
 
         // Stores a password_hash() digest, not the plaintext. bcrypt is 60 chars
         // today, but PASSWORD_DEFAULT can change to a longer algorithm — keep this
@@ -81,6 +88,12 @@ class UsersTable extends Table
         return $validator;
     }
 
+    /**
+     * Application integrity rules: email and username are each unique.
+     *
+     * @param \Cake\ORM\RulesChecker $rules The rules object to be modified.
+     * @return \Cake\ORM\RulesChecker
+     */
     public function buildRules(RulesChecker $rules): RulesChecker
     {
         $rules->add($rules->isUnique(['email'], 'This email is already registered.'));
