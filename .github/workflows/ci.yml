@@ -72,6 +72,12 @@ jobs:
       with:
         dependency-versions: locked
 
+    # Fails on any known security advisory in a package that ships to
+    # production. Dev-only packages (never installed in the Docker image) are
+    # excluded; abandoned packages are reported, not fatal.
+    - name: Composer audit (production dependencies)
+      run: composer audit --no-dev --abandoned=report
+
     # The codebase predates this check and has existing style violations, so
     # only the PHP files a push/PR changes are checked: new and edited files
     # must be clean, and the backlog shrinks as files are touched.
