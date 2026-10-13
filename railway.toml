@@ -7,3 +7,10 @@ dockerfilePath = "Dockerfile"
 # paid plan (Hobby+); on the trial's one-time credit this drains fast. The MySQL
 # service has its own sleep toggle in its Railway Settings — disable that too.
 sleepApplication = false
+
+# Staging only: let the staging API scale to zero when idle (it's used for
+# pre-release checks, not real users). This block applies to the Railway
+# environment named "staging" and nothing else; production keeps the
+# always-on setting above.
+[environments.staging.deploy]
+sleepApplication = true
