@@ -5,6 +5,8 @@ namespace App\Controller;
 
 use App\Payment\Plans;
 use App\Payment\Xendit;
+use App\Payment\XenditException;
+use App\Service\PassService;
 use Cake\Http\Response;
 use Cake\I18n\DateTime;
 use Cake\Log\Log;
@@ -19,9 +21,6 @@ class PaymentsController extends AppController
 {
     /** Reviewers a pass can be bought for (per-reviewer entitlements). */
     private const REVIEWERS = ['civil-service'];
-
-    /** Xendit invoice statuses that mean "money received". */
-    private const PAID_STATUSES = ['PAID', 'SETTLED'];
 
     /**
      * POST /api/checkout — body { reviewer, plan_id }. Reuses a very-recent
@@ -56,6 +55,7 @@ class PaymentsController extends AppController
                 return $this->json(['success' => false, 'message' => 'Unknown plan.'], 422);
             }
 
+            /** @var \App\Model\Table\PassesTable $passes */
             $passes = $this->fetchTable('Passes');
 
             // Reuse a very-recent still-pending invoice for the same
@@ -81,6 +81,7 @@ class PaymentsController extends AppController
 
             $user = $this->fetchTable('Users')->get($userId);
 
+            /** @var \App\Model\Entity\Pass $pass */
             $pass = $passes->newEntity([
                 'user_id' => $userId,
                 'reviewer' => $reviewer,
@@ -108,7 +109,17 @@ class PaymentsController extends AppController
 
             $pass->xendit_invoice_id = (string)($invoice['id'] ?? '');
             $pass->invoice_url = (string)($invoice['invoice_url'] ?? '');
-            $passes->save($pass);
+            if (!$passes->save($pass)) {
+                // The invoice exists and is payable, so still send the buyer to
+                // it. The webhook/reconcile find the invoice by external_id and
+                // back-fill the id; only the duplicate-click reuse is lost.
+                Log::error(sprintf(
+                    '[checkout] pass %d (%s): could not store Xendit invoice %s',
+                    $pass->pass_id,
+                    $pass->external_id,
+                    $pass->xendit_invoice_id,
+                ));
+            }
 
             return $this->json([
                 'success' => true,
@@ -126,9 +137,19 @@ class PaymentsController extends AppController
 
     /**
      * POST /api/xendit/webhook — Xendit's invoice callback. Verified by the
-     * `x-callback-token` header only (no session, no AJAX gate — Xendit calls
-     * this server-to-server). Idempotent; always 200 except on a bad token so
-     * Xendit does not retry-storm.
+     * `x-callback-token` header (no session, no AJAX gate — Xendit calls this
+     * server-to-server).
+     *
+     * The callback only says *which* pass to look at. What happens to it is
+     * decided by Xendit's own invoice record, fetched here and checked against
+     * the pass (amount, currency, ids) — see App\Service\PassService.
+     *
+     * Status codes tell Xendit whether to retry:
+     * - 2xx: handled (granted, expired, already done, unknown pass, or a
+     *   mismatch that retrying can't fix — logged as an error);
+     * - 503: Xendit's API unreachable, or it doesn't show the payment yet;
+     * - 500: our side failed (database, data error) — nothing was half-written.
+     * `bin/cake reconcile_payments` repairs anything retries didn't.
      */
     public function webhook(): Response
     {
@@ -139,56 +160,44 @@ class PaymentsController extends AppController
             return $this->json(['success' => false, 'message' => 'Invalid callback token'], 401);
         }
 
-        try {
-            $data = $this->request->getData();
-            $externalId = (string)($data['external_id'] ?? '');
-            $status = strtoupper((string)($data['status'] ?? ''));
+        $data = $this->request->getData();
+        $externalId = (string)($data['external_id'] ?? '');
+        $callbackStatus = strtoupper((string)($data['status'] ?? ''));
 
+        try {
+            /** @var \App\Model\Table\PassesTable $passes */
             $passes = $this->fetchTable('Passes');
+            /** @var \App\Model\Entity\Pass|null $pass */
             $pass = $externalId !== ''
                 ? $passes->find()->where(['external_id' => $externalId])->first()
                 : null;
 
-            // Unknown ref, or already handled — acknowledge and move on.
-            if (!$pass || $pass->status !== 'pending') {
-                return $this->json(['success' => true]);
+            if ($pass === null) {
+                Log::warning("[xendit webhook] no pass for external_id '{$externalId}' — ignored");
+
+                return $this->json(['success' => true, 'result' => 'unknown_pass']);
             }
 
-            if (in_array($status, self::PAID_STATUSES, true)) {
-                $plan = Plans::get((string)$pass->plan_id);
-                if ($plan === null) {
-                    Log::error("[xendit webhook] pass {$pass->pass_id}: unknown plan {$pass->plan_id}");
+            $result = (new PassService($passes))->reconcile($pass);
+        } catch (XenditException $e) {
+            Log::error("[xendit webhook] {$externalId}: could not verify with Xendit: " . $e->getMessage());
 
-                    return $this->json(['success' => true]);
-                }
-
-                $existing = $passes->activeForReviewer((int)$pass->user_id, (string)$pass->reviewer);
-                $base = new DateTime();
-                if ($existing !== null && $existing->expires_at !== null && $existing->expires_at->isFuture()) {
-                    $base = $existing->expires_at;
-                }
-
-                $pass->status = 'paid';
-                $pass->paid_at = new DateTime();
-                $pass->expires_at = $base->addDays($plan['days']);
-                $passes->save($pass);
-
-                if ($existing && $existing->pass_id !== $pass->pass_id) {
-                    $existing->status = 'superseded';
-                    $passes->save($existing);
-                }
-            } elseif ($status === 'EXPIRED') {
-                $pass->status = 'expired';
-                $passes->save($pass);
-            }
-
-            return $this->json(['success' => true]);
+            return $this->json(['success' => false, 'message' => 'Could not verify the invoice; retry later.'], 503);
         } catch (Throwable $e) {
-            Log::error('[xendit webhook] ' . $e->getMessage());
+            Log::error("[xendit webhook] {$externalId}: " . $e->getMessage());
 
-            // Ack anyway — reconcile from the Xendit dashboard if needed.
-            return $this->json(['success' => true]);
+            return $this->json(['success' => false, 'message' => 'Could not process the callback; retry later.'], 500);
         }
+
+        if ($result === PassService::INVOICE_NOT_FOUND) {
+            Log::error("[xendit webhook] {$externalId}: Xendit has no invoice for this pass — not granted");
+        }
+        // Xendit says it's paid, but its own API doesn't show that yet: retry.
+        if ($result === PassService::STILL_PENDING && in_array($callbackStatus, PassService::PAID_STATUSES, true)) {
+            return $this->json(['success' => false, 'message' => 'Payment not confirmed yet; retry later.'], 503);
+        }
+
+        return $this->json(['success' => true, 'result' => $result]);
     }
 
     /**
