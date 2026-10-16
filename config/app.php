@@ -385,6 +385,17 @@ return [
                 : ['warning', 'error', 'critical', 'alert', 'emergency'],
             'scopes' => null,
         ],
+        // Payment outcomes (webhook results, reconcile_payments changes) are
+        // logged at info level in the `payments` scope; this sends only those
+        // to stderr too, so `railway logs` shows them without making the rest
+        // of the app's info logging louder.
+        'payments' => [
+            'className' => StderrLog::class,
+            'levels' => env('LOG_STDERR', '1') === '0'
+                ? ['__disabled__']
+                : ['info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'],
+            'scopes' => ['payments'],
+        ],
     ],
 
     /*

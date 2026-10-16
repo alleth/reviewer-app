@@ -223,6 +223,200 @@ class PassServiceTest extends TestCase
         (new PassService($this->passes))->reconcile($pass);
     }
 
+    /**
+     * A payment made right at expiry: the EXPIRED notification was applied
+     * first, then Xendit confirmed the payment. The buyer still gets access.
+     */
+    public function testExpiredPassIsGrantedLateWhenXenditShowsItPaid(): void
+    {
+        $pass = $this->makePass(['status' => 'expired']);
+        $this->fakeXenditGetInvoice($this->xenditInvoiceFor($pass, 'PAID'));
+
+        $result = (new PassService($this->passes))->reconcile($pass);
+
+        $this->assertSame(PassService::LATE_GRANTED, $result);
+        $granted = $this->reload($pass);
+        $this->assertSame('paid', $granted->status);
+        $this->assertNotNull($granted->paid_at);
+        $this->assertNotNull($granted->expires_at);
+        $this->assertEqualsWithDelta(
+            (new DateTime())->addDays(7)->getTimestamp(),
+            $granted->expires_at->getTimestamp(),
+            60,
+        );
+    }
+
+    public function testSettledInvoiceAlsoGrantsAnExpiredPassLate(): void
+    {
+        $pass = $this->makePass(['status' => 'expired']);
+        $this->fakeXenditGetInvoice($this->xenditInvoiceFor($pass, 'SETTLED'));
+
+        $this->assertSame(PassService::LATE_GRANTED, (new PassService($this->passes))->reconcile($pass));
+        $this->assertSame('paid', $this->reload($pass)->status);
+    }
+
+    /**
+     * A late grant stacks on the buyer's active pass and supersedes it, like
+     * any other grant.
+     */
+    public function testLateGrantStacksOnTheActivePass(): void
+    {
+        $activeExpiry = (new DateTime())->addDays(5);
+        $active = $this->makePass([
+            'status' => 'paid',
+            'paid_at' => (new DateTime())->subDays(2),
+            'expires_at' => $activeExpiry,
+        ]);
+        $late = $this->makePass(['status' => 'expired', 'plan_id' => '30-day', 'amount' => '174.07']);
+
+        $result = (new PassService($this->passes))
+            ->applyInvoice($late, $this->xenditInvoiceFor($late, 'PAID'));
+
+        $this->assertSame(PassService::LATE_GRANTED, $result);
+        // DATETIME keeps whole seconds.
+        $this->assertSame(
+            $activeExpiry->addDays(30)->format('Y-m-d H:i:s'),
+            $this->reload($late)->expires_at?->format('Y-m-d H:i:s'),
+        );
+        $this->assertSame('superseded', $this->reload($active)->status);
+    }
+
+    /**
+     * The late grant and the supersede commit together or not at all.
+     */
+    public function testLateGrantIsRolledBackWhenSupersedeFails(): void
+    {
+        $active = $this->makePass([
+            'status' => 'paid',
+            'paid_at' => (new DateTime())->subDays(2),
+            'expires_at' => (new DateTime())->addDays(5),
+        ]);
+        $late = $this->makePass(['status' => 'expired']);
+
+        $failingTable = new class ([
+            'alias' => 'Passes',
+            'table' => 'passes',
+            'entityClass' => Pass::class,
+            'connection' => ConnectionManager::get('test'),
+        ]) extends PassesTable {
+            public function updateAll(
+                QueryExpression|Closure|array|string $fields,
+                QueryExpression|Closure|array|string|null $conditions,
+            ): int {
+                if (is_array($fields) && ($fields['status'] ?? null) === 'superseded') {
+                    throw new RuntimeException('simulated database failure');
+                }
+
+                return parent::updateAll($fields, $conditions);
+            }
+        };
+
+        try {
+            (new PassService($failingTable))->applyInvoice($late, $this->xenditInvoiceFor($late, 'PAID'));
+            $this->fail('Expected the simulated failure to propagate.');
+        } catch (RuntimeException $e) {
+            $this->assertSame('simulated database failure', $e->getMessage());
+        }
+
+        $this->assertSame('expired', $this->reload($late)->status);
+        $this->assertNull($this->reload($late)->paid_at);
+        $this->assertNull($this->reload($late)->expires_at);
+        $this->assertSame('paid', $this->reload($active)->status);
+    }
+
+    /**
+     * Xendit still shows the invoice expired (or unpaid): nothing changes, and
+     * the pass is never "re-expired".
+     *
+     * @return array<string, array{string}>
+     */
+    public static function unpaidStatuses(): array
+    {
+        return ['EXPIRED' => ['EXPIRED'], 'PENDING' => ['PENDING']];
+    }
+
+    /**
+     * @param string $status Xendit invoice status.
+     * @dataProvider unpaidStatuses
+     */
+    public function testExpiredPassStaysExpiredWhileXenditShowsItUnpaid(string $status): void
+    {
+        $pass = $this->makePass(['status' => 'expired']);
+        $modified = $this->reload($pass)->modified;
+        $this->fakeXenditGetInvoice($this->xenditInvoiceFor($pass, $status));
+
+        $this->assertSame(PassService::EXPIRED_UNPAID, (new PassService($this->passes))->reconcile($pass));
+        $this->assertSame('expired', $this->reload($pass)->status);
+        $this->assertNull($this->reload($pass)->paid_at);
+        $this->assertEquals($modified, $this->reload($pass)->modified);
+    }
+
+    /**
+     * The same mismatch protections apply to a late payment.
+     *
+     * @param array<string, mixed> $override Field that makes the invoice wrong.
+     * @dataProvider mismatchedInvoices
+     */
+    public function testMismatchedInvoiceDoesNotGrantAnExpiredPass(array $override): void
+    {
+        $pass = $this->makePass(['status' => 'expired']);
+        $result = (new PassService($this->passes))
+            ->applyInvoice($pass, $this->xenditInvoiceFor($pass, 'PAID', $override));
+
+        $this->assertSame(PassService::MISMATCH, $result);
+        $this->assertSame('expired', $this->reload($pass)->status);
+    }
+
+    /**
+     * Webhook and reconcile racing on the same late payment grant it once.
+     */
+    public function testStaleExpiredCopyCannotGrantTwice(): void
+    {
+        $pass = $this->makePass(['status' => 'expired']);
+        $invoice = $this->xenditInvoiceFor($pass, 'PAID');
+        $staleCopy = $this->reload($pass);
+        $service = new PassService($this->passes);
+
+        $this->assertSame(PassService::LATE_GRANTED, $service->applyInvoice($pass, $invoice));
+        $expiry = $this->reload($pass)->expires_at;
+
+        $this->assertSame('expired', $staleCopy->status);
+        $this->assertSame(PassService::ALREADY_HANDLED, $service->applyInvoice($staleCopy, $invoice));
+        $this->assertEquals($expiry, $this->reload($pass)->expires_at);
+    }
+
+    /**
+     * Only pending and expired passes are looked up; anything else is final.
+     * No Xendit response is faked here, so a lookup would throw.
+     *
+     * @return array<string, array{string}>
+     */
+    public static function finalStatuses(): array
+    {
+        return ['paid' => ['paid'], 'superseded' => ['superseded'], 'failed' => ['failed']];
+    }
+
+    /**
+     * @param string $status Pass status.
+     * @dataProvider finalStatuses
+     */
+    public function testFinalPassesAreNotLookedUpAgain(string $status): void
+    {
+        $pass = $this->makePass(['status' => $status]);
+
+        $this->assertSame(PassService::ALREADY_HANDLED, (new PassService($this->passes))->reconcile($pass));
+        $this->assertSame($status, $this->reload($pass)->status);
+    }
+
+    public function testExpiredPassWithoutAnInvoiceAtXenditIsLeftAlone(): void
+    {
+        $pass = $this->makePass(['status' => 'expired', 'xendit_invoice_id' => null]);
+        $this->fakeXenditFindByExternalId($pass->external_id, []);
+
+        $this->assertSame(PassService::ALREADY_HANDLED, (new PassService($this->passes))->reconcile($pass));
+        $this->assertSame('expired', $this->reload($pass)->status);
+    }
+
     public function testMarkFailedOnlyAffectsPendingPasses(): void
     {
         $pending = $this->makePass();

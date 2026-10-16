@@ -11,6 +11,7 @@ use Cake\Console\Arguments;
 use Cake\Console\ConsoleIo;
 use Cake\Console\ConsoleOptionParser;
 use Cake\I18n\DateTime;
+use Cake\Log\Log;
 use Throwable;
 
 /**
@@ -27,9 +28,15 @@ use Throwable;
  * A pass whose invoice Xendit doesn't know about is marked `failed` once it is
  * older than --fail-after hours (checkout died before the invoice existed).
  *
+ * `expired` passes created within --expired-max-age hours are re-checked too:
+ * if Xendit now shows the invoice paid (a payment made right at expiry), the
+ * pass is granted late. Otherwise they are left alone and only counted
+ * (`expired_unpaid`) — an abandoned checkout is not a problem.
+ *
  * Safe to run any time and repeatedly (every write is conditional on the pass
- * still being pending). Exits non-zero when anything needs a human — Xendit
- * unreachable, a mismatch, or an error — so a scheduler can alert on it.
+ * still having the status it was read with). Exits non-zero when anything
+ * needs a human — Xendit unreachable, a mismatch, or an error — so a scheduler
+ * can alert on it.
  */
 class ReconcilePaymentsCommand extends Command
 {
@@ -50,6 +57,10 @@ class ReconcilePaymentsCommand extends Command
                 'default' => '168',
                 'help' => 'Ignore passes older than this many hours.',
             ])
+            ->addOption('expired-max-age', [
+                'default' => '48',
+                'help' => 'Re-check expired passes created within this many hours for a late payment.',
+            ])
             ->addOption('fail-after', [
                 'default' => '25',
                 'help' => 'Mark a pass failed when Xendit has no invoice for it and it is older than this many hours.',
@@ -67,6 +78,7 @@ class ReconcilePaymentsCommand extends Command
         $dryRun = (bool)$args->getOption('dry-run');
         $minAge = max(0, (int)$args->getOption('min-age'));
         $maxAge = max(1, (int)$args->getOption('max-age'));
+        $expiredMaxAge = max(1, (int)$args->getOption('expired-max-age'));
         $failAfter = max(1, (int)$args->getOption('fail-after'));
         $limit = max(1, (int)$args->getOption('limit'));
 
@@ -86,6 +98,16 @@ class ReconcilePaymentsCommand extends Command
             ->limit($limit)
             ->all()
             ->toList();
+        /** @var list<\App\Model\Entity\Pass> $expired */
+        $expired = $passes->find()
+            ->where([
+                'status' => 'expired',
+                'created >=' => $now->subHours($expiredMaxAge),
+            ])
+            ->orderBy(['created' => 'ASC'])
+            ->limit($limit)
+            ->all()
+            ->toList();
 
         $io->out(sprintf(
             '%s%d pending pass(es) between %d min and %d h old.',
@@ -94,10 +116,15 @@ class ReconcilePaymentsCommand extends Command
             $minAge,
             $maxAge,
         ));
+        $io->out(sprintf(
+            '%d expired pass(es) from the last %d h re-checked for a late payment.',
+            count($expired),
+            $expiredMaxAge,
+        ));
 
         $counts = [];
         $needsAttention = 0;
-        foreach ($pending as $pass) {
+        foreach (array_merge($pending, $expired) as $pass) {
             try {
                 $result = $this->handle($pass, $service, $dryRun, $now->subHours($failAfter));
             } catch (XenditException $e) {
@@ -112,8 +139,15 @@ class ReconcilePaymentsCommand extends Command
             if (in_array($result, [PassService::MISMATCH, 'xendit_unreachable', 'error'], true)) {
                 $needsAttention++;
             }
-            if ($result !== PassService::STILL_PENDING) {
+            $quiet = in_array($result, [PassService::STILL_PENDING, PassService::EXPIRED_UNPAID], true);
+            if (!$quiet) {
                 $io->out("  pass {$pass->pass_id} ({$pass->external_id}): {$result}");
+                if (!$dryRun) {
+                    Log::info(
+                        "[reconcile_payments] pass {$pass->pass_id} ({$pass->external_id}): {$result}",
+                        ['scope' => 'payments'],
+                    );
+                }
             }
         }
 
@@ -149,6 +183,23 @@ class ReconcilePaymentsCommand extends Command
         DateTime $failBefore,
     ): string {
         $invoice = $service->fetchInvoice($pass);
+
+        if ($pass->status === 'expired') {
+            // Only a confirmed late payment matters; an expired pass is never
+            // marked failed or closed again.
+            if ($invoice === null) {
+                return PassService::EXPIRED_UNPAID;
+            }
+            if ($dryRun) {
+                return match ($service->decide($pass, $invoice)) {
+                    PassService::GRANTED => 'would_grant_late',
+                    PassService::MISMATCH => PassService::MISMATCH,
+                    default => PassService::EXPIRED_UNPAID,
+                };
+            }
+
+            return $service->applyInvoice($pass, $invoice);
+        }
 
         if ($invoice === null) {
             $tooOld = $pass->created !== null && $pass->created->lessThan($failBefore);

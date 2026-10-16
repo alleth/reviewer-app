@@ -7,6 +7,7 @@ use App\Model\Entity\Pass;
 use App\Test\TestSuite\ApiTestTrait;
 use App\Test\TestSuite\XenditTestTrait;
 use Cake\I18n\DateTime;
+use Cake\Log\Log;
 use Cake\TestSuite\IntegrationTestTrait;
 use Cake\TestSuite\TestCase;
 use DateTimeInterface;
@@ -400,6 +401,98 @@ class PaymentsControllerTest extends TestCase
         $expired = $this->reloadPass($pass->pass_id);
         $this->assertSame('expired', $expired->status);
         $this->assertNull($expired->expires_at);
+    }
+
+    /**
+     * A payment made right at expiry: the pass was already marked expired when
+     * the PAID callback arrives, and Xendit's API confirms the payment.
+     *
+     * @return void
+     * @uses \App\Controller\PaymentsController::webhook()
+     */
+    public function testWebhookPaidAfterExpiryGrantsThePassLate(): void
+    {
+        $pass = $this->makePass(['status' => 'expired']);
+        $this->fakeXenditGetInvoice($this->xenditInvoiceFor($pass, 'PAID'));
+
+        $this->postXenditWebhook(['external_id' => $pass->external_id, 'status' => 'PAID']);
+
+        $this->assertResponseOk();
+        $this->assertSame('granted_late', $this->responseJson()['result']);
+        $granted = $this->reloadPass($pass->pass_id);
+        $this->assertSame('paid', $granted->status);
+        $this->assertNotNull($granted->expires_at);
+
+        $this->loginAs(1);
+        $this->get('/api/purchases');
+        $this->assertSame([$pass->pass_id], array_column($this->responseJson()['purchases'], 'id'));
+    }
+
+    /**
+     * Xendit says PAID but its API still shows the invoice expired: retry
+     * rather than acknowledge, so the payment isn't dropped.
+     *
+     * @return void
+     * @uses \App\Controller\PaymentsController::webhook()
+     */
+    public function testWebhookPaidForExpiredPassReturns503UntilXenditConfirms(): void
+    {
+        $pass = $this->makePass(['status' => 'expired']);
+        $this->fakeXenditGetInvoice($this->xenditInvoiceFor($pass, 'EXPIRED'));
+
+        $this->postXenditWebhook(['external_id' => $pass->external_id, 'status' => 'PAID']);
+
+        $this->assertResponseCode(503);
+        $this->assertSame('expired', $this->reloadPass($pass->pass_id)->status);
+    }
+
+    /**
+     * A repeated EXPIRED notification is acknowledged and changes nothing.
+     *
+     * @return void
+     * @uses \App\Controller\PaymentsController::webhook()
+     */
+    public function testWebhookExpiredForAlreadyExpiredPassIsANoOp(): void
+    {
+        $pass = $this->makePass(['status' => 'expired']);
+        $modified = $this->reloadPass($pass->pass_id)->modified;
+        $this->fakeXenditGetInvoice($this->xenditInvoiceFor($pass, 'EXPIRED'));
+
+        $this->postXenditWebhook(['external_id' => $pass->external_id, 'status' => 'EXPIRED']);
+
+        $this->assertResponseOk();
+        $this->assertSame('expired_unpaid', $this->responseJson()['result']);
+        $unchanged = $this->reloadPass($pass->pass_id);
+        $this->assertSame('expired', $unchanged->status);
+        $this->assertEquals($modified, $unchanged->modified);
+    }
+
+    /**
+     * Each webhook outcome is logged in the `payments` scope (which config/app.php
+     * mirrors to stderr, i.e. `railway logs`).
+     *
+     * @return void
+     * @uses \App\Controller\PaymentsController::webhook()
+     */
+    public function testWebhookLogsItsOutcomeInThePaymentsScope(): void
+    {
+        Log::setConfig('test_payments', ['className' => 'Array', 'scopes' => ['payments'], 'levels' => ['info']]);
+        try {
+            $pass = $this->makePass();
+            $this->fakeXenditGetInvoice($this->xenditInvoiceFor($pass, 'PAID'));
+
+            $this->postXenditWebhook(['external_id' => $pass->external_id, 'status' => 'PAID']);
+
+            $this->assertResponseOk();
+            /** @var \Cake\Log\Engine\ArrayLog $engine */
+            $engine = Log::engine('test_payments');
+            $this->assertSame(
+                ["info: [xendit webhook] {$pass->external_id}: granted (callback PAID)"],
+                $engine->read(),
+            );
+        } finally {
+            Log::drop('test_payments');
+        }
     }
 
     /**

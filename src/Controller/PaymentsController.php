@@ -192,8 +192,12 @@ class PaymentsController extends AppController
         if ($result === PassService::INVOICE_NOT_FOUND) {
             Log::error("[xendit webhook] {$externalId}: Xendit has no invoice for this pass — not granted");
         }
-        // Xendit says it's paid, but its own API doesn't show that yet: retry.
-        if ($result === PassService::STILL_PENDING && in_array($callbackStatus, PassService::PAID_STATUSES, true)) {
+        Log::info("[xendit webhook] {$externalId}: {$result} (callback {$callbackStatus})", ['scope' => 'payments']);
+
+        // Xendit says it's paid, but its own API doesn't show that yet — for a
+        // pending pass, or one already expired (payment right at expiry): retry.
+        $unconfirmed = [PassService::STILL_PENDING, PassService::EXPIRED_UNPAID];
+        if (in_array($result, $unconfirmed, true) && in_array($callbackStatus, PassService::PAID_STATUSES, true)) {
             return $this->json(['success' => false, 'message' => 'Payment not confirmed yet; retry later.'], 503);
         }
 
