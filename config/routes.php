@@ -11,6 +11,8 @@ return function (RouteBuilder $routes): void {
     $routes->connect('/api/register', ['controller' => 'Users', 'action' => 'register']);
     $routes->connect('/api/logout', ['controller' => 'Users', 'action' => 'logout']);
     $routes->connect('/api/session', ['controller' => 'Users', 'action' => 'session']);
+    $routes->connect('/api/verify-email', ['controller' => 'Users', 'action' => 'verifyEmail']);
+    $routes->connect('/api/verify-email/resend', ['controller' => 'Users', 'action' => 'resendVerification']);
     $routes->connect('/api/google-login', ['controller' => 'Users', 'action' => 'googleLogin']);
     $routes->connect('/api/account/setup', ['controller' => 'Users', 'action' => 'setupAccount']);
     $routes->connect('/api/account', ['controller' => 'Users', 'action' => 'updateAccount']);

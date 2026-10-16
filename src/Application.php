@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace App;
 
+use App\Auth\GoogleTokenVerifier;
+use App\Auth\GoogleTokenVerifierInterface;
 use App\Middleware\CorsMiddleware;
 use Cake\Core\Configure;
 use Cake\Core\ContainerInterface;
@@ -17,6 +19,9 @@ use Cake\Routing\Middleware\RoutingMiddleware;
 
 class Application extends BaseApplication
 {
+    /**
+     * @inheritDoc
+     */
     public function bootstrap(): void
     {
         parent::bootstrap();
@@ -26,6 +31,12 @@ class Application extends BaseApplication
         }
     }
 
+    /**
+     * The middleware queue. Order matters: see CLAUDE.md (CORS & Middleware).
+     *
+     * @param \Cake\Http\MiddlewareQueue $middlewareQueue The queue to fill.
+     * @return \Cake\Http\MiddlewareQueue
+     */
     public function middleware(MiddlewareQueue $middlewareQueue): MiddlewareQueue
     {
         $middlewareQueue
@@ -40,7 +51,15 @@ class Application extends BaseApplication
         return $middlewareQueue;
     }
 
+    /**
+     * Services for dependency injection into controllers and commands.
+     *
+     * @param \Cake\Core\ContainerInterface $container The container to register in.
+     * @return void
+     */
     public function services(ContainerInterface $container): void
     {
+        // Injected into UsersController::googleLogin(); tests replace it with mockService().
+        $container->add(GoogleTokenVerifierInterface::class, GoogleTokenVerifier::class);
     }
 }

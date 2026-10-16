@@ -1,7 +1,10 @@
 <?php
+declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Auth\GoogleTokenVerifierInterface;
+use App\Auth\InvalidGoogleCredentialException;
 use App\Mailer\Transport\BrevoTransport;
 use App\Model\Entity\User;
 use Cake\Http\Response;
@@ -10,8 +13,14 @@ use Cake\Log\Log;
 use Cake\Mailer\Message;
 use Cake\Mailer\Transport\SmtpTransport;
 use Cake\Mailer\TransportFactory;
+use LogicException;
 use Throwable;
 
+/**
+ * Sign-up, sign-in and account endpoints (see CLAUDE.md, Authentication).
+ *
+ * @property \App\Model\Table\UsersTable $Users
+ */
 class UsersController extends AppController
 {
     /** How long an emailed code stays valid, and how many guesses it allows. */
@@ -31,12 +40,25 @@ class UsersController extends AppController
     private const LOGIN_MAX_FAILURES = 10;
     private const LOGIN_FAILURE_WINDOW_MINUTES = 15;
 
+    /**
+     * Email verification (B3-V). `verify_email` rows hold the code itself;
+     * `verify_email_sent` rows hold no code, one per email sent, and back the
+     * resend limits (a cooldown, and a daily cap that bounds code guessing).
+     */
+    private const PURPOSE_VERIFY_EMAIL = 'verify_email';
+    private const PURPOSE_VERIFY_EMAIL_SENT = 'verify_email_sent';
+    private const VERIFY_RESEND_COOLDOWN_SECONDS = 60;
+    private const VERIFY_MAX_CODES_PER_DAY = 10;
+
     /** A hash that stays stable per browser/device (used by the guard). */
     private function deviceHash(): string
     {
         return hash('sha256', (string)$this->request->getHeaderLine('User-Agent'));
     }
 
+    /**
+     * Records a completed login for the rapid device-switch guard.
+     */
     private function recordLoginEvent(int $userId): void
     {
         $events = $this->fetchTable('LoginEvents');
@@ -195,6 +217,9 @@ class UsersController extends AppController
         }
     }
 
+    /**
+     * Emails a one-time code, with $intro saying what it is for.
+     */
     private function sendAuthCode(string $email, string $code, string $intro): void
     {
         $body = "$intro\n\nYour code is: $code\n\n"
@@ -265,6 +290,102 @@ class UsersController extends AppController
     }
 
     /**
+     * Emails a fresh `verify_email` code to an unverified account — unless one
+     * went out in the last VERIFY_RESEND_COOLDOWN_SECONDS, or the account has
+     * already been sent VERIFY_MAX_CODES_PER_DAY in 24 hours (with 5 guesses a
+     * code, that caps guessing at 50 a day). Every send leaves a code-less
+     * `verify_email_sent` row, so both limits survive issueCode() replacing the
+     * code. Callers answer the same way whether or not a code went out.
+     */
+    private function sendVerificationCode(User $user, string $intro): bool
+    {
+        $userId = (int)$user->user_id;
+        $codes = $this->fetchTable('AuthCodes');
+        $now = new DateTime();
+
+        $codes->deleteAll([
+            'user_id' => $userId,
+            'purpose' => self::PURPOSE_VERIFY_EMAIL_SENT,
+            'created <' => $now->modify('-1 day'),
+        ]);
+        $sent = $codes->find()
+            ->where(['user_id' => $userId, 'purpose' => self::PURPOSE_VERIFY_EMAIL_SENT])
+            ->orderBy(['created' => 'DESC', 'auth_code_id' => 'DESC'])
+            ->all();
+        $last = $sent->first();
+        $coolingDown = $last !== null
+            && $last->created->greaterThan($now->modify('-' . self::VERIFY_RESEND_COOLDOWN_SECONDS . ' seconds'));
+        if ($coolingDown || $sent->count() >= self::VERIFY_MAX_CODES_PER_DAY) {
+            return false;
+        }
+
+        $codes->saveOrFail($codes->newEntity([
+            'user_id' => $userId,
+            'purpose' => self::PURPOSE_VERIFY_EMAIL_SENT,
+            'code_hash' => '',
+            'expires' => $now->modify('+1 day'),
+            'attempts' => 0,
+            'created' => $now,
+        ]));
+        $this->sendAuthCode((string)$user->email, $this->issueCode($userId, self::PURPOSE_VERIFY_EMAIL), $intro);
+
+        return true;
+    }
+
+    /**
+     * The answer for an account that needs its email verified before it gets a
+     * session: the SPA shows a code field and posts the code to /api/verify-email
+     * with this `email`.
+     *
+     * @return array<string, mixed>
+     */
+    private function needsVerification(User $user, string $message): array
+    {
+        return [
+            'success' => false,
+            'needsVerification' => true,
+            'email' => $user->email,
+            'message' => $message,
+        ];
+    }
+
+    /**
+     * B3-V (d): a Google login whose (Google-verified) email matches an account
+     * that never proved its address. Whoever registered that account didn't
+     * control the inbox, and Google just showed that this person does, so the
+     * account becomes theirs: marked verified and linked to this Google login,
+     * with the unproven password, every session (token rotated), every emailed
+     * code and the login events removed, and the names replaced by Google's when
+     * Google gives them. All of it commits together or not at all.
+     */
+    private function takeOverUnverifiedAccount(User $user, string $googleId, string $fname, string $lname): void
+    {
+        $userId = (int)$user->user_id;
+
+        $this->Users->getConnection()->transactional(
+            function () use ($user, $userId, $googleId, $fname, $lname): bool {
+                $this->fetchTable('AuthCodes')->deleteAll(['user_id' => $userId]);
+                $this->fetchTable('LoginEvents')->deleteAll(['user_id' => $userId]);
+
+                $user->email_verified_at = new DateTime();
+                $user->user_pass = null;
+                $user->session_token = bin2hex(random_bytes(20));
+                $user->google_id = $googleId;
+                if ($fname !== '') {
+                    $user->fname = mb_substr($fname, 0, 50);
+                }
+                if ($lname !== '') {
+                    $user->lname = mb_substr($lname, 0, 50);
+                }
+                // Throws (and so rolls back the deletes above) if the save fails.
+                $this->Users->saveOrFail($user, ['atomic' => false]);
+
+                return true;
+            },
+        );
+    }
+
+    /**
      * Lightweight CSRF gate for the state-changing auth actions. This app has no CSRF
      * middleware (removed entirely so the cross-origin SPA can POST at all) and session
      * cookies are SameSite=None (required for the same reason) — so without this, any
@@ -278,7 +399,7 @@ class UsersController extends AppController
      *
      * @return \Cake\Http\Response|null A 403 response if the header is missing, null to continue.
      */
-    private function requireAjaxHeader(): ?\Cake\Http\Response
+    private function requireAjaxHeader(): ?Response
     {
         if ($this->request->getHeaderLine('X-Requested-With') !== 'XMLHttpRequest') {
             return $this->response
@@ -297,6 +418,12 @@ class UsersController extends AppController
      */
     private function startSession(User $user): void
     {
+        // Backstop: every caller checks first, but an account that hasn't proven
+        // its email must never get a session (B3-V), whatever path got here.
+        if (!$user->isEmailVerified()) {
+            throw new LogicException("Refusing to start a session for unverified user {$user->user_id}");
+        }
+
         $token = bin2hex(random_bytes(20));
         $user->session_token = $token;
         $this->Users->save($user);
@@ -344,11 +471,16 @@ class UsersController extends AppController
         return (int)$user->user_id;
     }
 
-    public function login()
+    /**
+     * Password sign-in by username or email. See CLAUDE.md (Authentication) for
+     * the throttle, the device-switch challenge and the email-verification step.
+     */
+    public function login(): Response
     {
         $this->request->allowMethod(['post']);
 
-        if ($blocked = $this->requireAjaxHeader()) {
+        $blocked = $this->requireAjaxHeader();
+        if ($blocked !== null) {
             return $blocked;
         }
 
@@ -357,7 +489,7 @@ class UsersController extends AppController
             $data = $this->request->getData();
 
             $username = $data['user_name'] ?? '';
-            $password = $data['user_pass'] ?? '';
+            $password = (string)($data['user_pass'] ?? '');
             $identifier = $this->loginIdentifier((string)$username);
 
             $throttled = $this->loginThrottle($identifier);
@@ -373,12 +505,25 @@ class UsersController extends AppController
             if ($user && $user->user_pass !== null && password_verify($password, $user->user_pass)) {
                 // Correct password — clear the guess counter for this identifier.
                 $this->clearLoginFailures($identifier);
-                $challenge = $this->loginChallenge(
-                    (int)$user->user_id,
-                    (string)$user->email,
-                    trim((string)($data['code'] ?? '')),
-                );
-                if ($challenge !== null) {
+                $challenge = $user->isEmailVerified()
+                    ? $this->loginChallenge(
+                        (int)$user->user_id,
+                        (string)$user->email,
+                        trim((string)($data['code'] ?? '')),
+                    )
+                    : null;
+                if (!$user->isEmailVerified()) {
+                    // No session until the email address is proven (B3-V).
+                    $this->sendVerificationCode(
+                        $user,
+                        'Confirm your email address to finish signing in to CareerPass.',
+                    );
+                    $response = $this->needsVerification(
+                        $user,
+                        'Confirm your email address to finish signing in. '
+                        . "Enter the 6-digit code we emailed to {$user->email}.",
+                    );
+                } elseif ($challenge !== null) {
                     $response = $challenge;
                 } else {
                     // Upgrade the stored hash if PHP's default algorithm/cost has
@@ -397,7 +542,8 @@ class UsersController extends AppController
                 $response = [
                     'success' => false,
                     'needsGoogleSetup' => true,
-                    'message' => 'For your security, this account needs a one-time setup. Continue with Google to finish it.',
+                    'message' => 'For your security, this account needs a one-time setup. '
+                        . 'Continue with Google to finish it.',
                     'account' => [
                         'email' => $user->email,
                         'fname' => $user->fname,
@@ -418,17 +564,23 @@ class UsersController extends AppController
             ->withStringBody(json_encode($response));
     }
 
-    public function googleLogin(): \Cake\Http\Response
+    /**
+     * Google sign-in: verifies the ID token, then finds the account by google_id,
+     * then by email, or creates one. Only an email Google has verified is
+     * accepted.
+     */
+    public function googleLogin(GoogleTokenVerifierInterface $verifier): Response
     {
         $this->request->allowMethod(['post']);
 
-        if ($blocked = $this->requireAjaxHeader()) {
+        $blocked = $this->requireAjaxHeader();
+        if ($blocked !== null) {
             return $blocked;
         }
 
         try {
             $credential = $this->request->getData('credential');
-            if (empty($credential)) {
+            if (!is_string($credential) || $credential === '') {
                 return $this->response
                     ->withStatus(400)
                     ->withType('application/json')
@@ -443,32 +595,51 @@ class UsersController extends AppController
                     ->withStringBody(json_encode(['success' => false, 'message' => 'Google client not configured']));
             }
 
-            $client = new \Google_Client(['client_id' => $clientId]);
-            $payload = $client->verifyIdToken($credential);
+            try {
+                $payload = $verifier->verify($credential, (string)$clientId);
+            } catch (InvalidGoogleCredentialException $e) {
+                return $this->json(['success' => false, 'message' => 'Invalid Google credential'], 400);
+            }
 
-            if (!$payload) {
+            $googleId = (string)($payload['sub'] ?? '');
+            if ($payload === null || $googleId === '') {
                 return $this->response
                     ->withStatus(401)
                     ->withType('application/json')
                     ->withStringBody(json_encode(['success' => false, 'message' => 'Invalid Google token']));
             }
 
-            $googleId = $payload['sub'];
-            $email = $payload['email'] ?? '';
-            $fname = $payload['given_name'] ?? '';
-            $lname = $payload['family_name'] ?? '';
+            $email = trim((string)($payload['email'] ?? ''));
+            $fname = trim((string)($payload['given_name'] ?? ''));
+            $lname = trim((string)($payload['family_name'] ?? ''));
+
+            // Only an address Google itself has verified can sign in to, create
+            // or claim an account here (B3-V).
+            if ($email === '' || ($payload['email_verified'] ?? null) !== true) {
+                return $this->json([
+                    'success' => false,
+                    'message' => "Your Google account's email address isn't verified by Google. "
+                        . 'Verify it with Google first, or sign up with your email and a password.',
+                ], 403);
+            }
 
             $user = $this->Users->find()->where(['google_id' => $googleId])->first();
+            $isNewUser = false;
 
             if (!$user) {
                 $user = $this->Users->find()->where(['email' => $email])->first();
-                if ($user) {
+                if ($user && !$user->isEmailVerified()) {
+                    // Registered with this address but never verified: Google
+                    // proves who owns it, so the account goes to them (B3-V (d)).
+                    // It's left without a password, so treat it like a new
+                    // sign-up and offer account setup.
+                    $this->takeOverUnverifiedAccount($user, $googleId, $fname, $lname);
+                    $isNewUser = true;
+                } elseif ($user) {
                     $user->google_id = $googleId;
                     $this->Users->save($user);
                 }
             }
-
-            $isNewUser = false;
 
             if (!$user) {
                 $userName = strstr($email, '@', true) ?: 'user' . substr($googleId, 0, 8);
@@ -484,8 +655,10 @@ class UsersController extends AppController
                     'lname' => $lname,
                     'email' => $email,
                     'user_name' => $userName,
-                    'google_id' => $googleId,
                 ]);
+                $user->google_id = $googleId;
+                // Google has verified this address (checked above).
+                $user->email_verified_at = new DateTime();
 
                 if (!$this->Users->save($user)) {
                     return $this->response
@@ -522,11 +695,12 @@ class UsersController extends AppController
      * Two-step: the first call (no `code`) emails a verification code and returns
      * `needsCode: true`; the second call must include that `code`.
      */
-    public function setupAccount(): \Cake\Http\Response
+    public function setupAccount(): Response
     {
         $this->request->allowMethod(['post']);
 
-        if ($blocked = $this->requireAjaxHeader()) {
+        $blocked = $this->requireAjaxHeader();
+        if ($blocked !== null) {
             return $blocked;
         }
 
@@ -545,7 +719,10 @@ class UsersController extends AppController
                 return $this->response
                     ->withStatus(409)
                     ->withType('application/json')
-                    ->withStringBody(json_encode(['success' => false, 'message' => 'This account already has a password set.']));
+                    ->withStringBody(json_encode([
+                        'success' => false,
+                        'message' => 'This account already has a password set.',
+                    ]));
             }
 
             $data = $this->request->getData();
@@ -558,7 +735,7 @@ class UsersController extends AppController
             $code = trim((string)($data['code'] ?? ''));
             if ($code === '') {
                 $this->sendAuthCode(
-                    $user->email,
+                    (string)$user->email,
                     $this->issueCode($userId, 'set_password'),
                     "Confirm it's you before setting a password on your CareerPass account.",
                 );
@@ -578,7 +755,7 @@ class UsersController extends AppController
                 );
             }
 
-            $patch = ['user_pass' => password_hash($password, PASSWORD_DEFAULT)];
+            $patch = [];
             foreach (['fname', 'lname', 'user_name'] as $field) {
                 if (!empty($data[$field])) {
                     $patch[$field] = $data[$field];
@@ -586,6 +763,8 @@ class UsersController extends AppController
             }
 
             $user = $this->Users->patchEntity($user, $patch);
+            // Not mass-assignable (see User::$_accessible), so set it directly.
+            $user->user_pass = password_hash($password, PASSWORD_DEFAULT);
 
             if (!$this->Users->save($user)) {
                 return $this->response
@@ -609,11 +788,12 @@ class UsersController extends AppController
      * the Settings page. Does not touch the password — that's setupAccount() for
      * first-time setup, and a dedicated change-password flow later.
      */
-    public function updateAccount(): \Cake\Http\Response
+    public function updateAccount(): Response
     {
         $this->request->allowMethod(['post', 'put', 'patch']);
 
-        if ($blocked = $this->requireAjaxHeader()) {
+        $blocked = $this->requireAjaxHeader();
+        if ($blocked !== null) {
             return $blocked;
         }
 
@@ -655,11 +835,15 @@ class UsersController extends AppController
         }
     }
 
-    public function logout(): \Cake\Http\Response
+    /**
+     * Ends this session.
+     */
+    public function logout(): Response
     {
         $this->request->allowMethod(['post']);
 
-        if ($blocked = $this->requireAjaxHeader()) {
+        $blocked = $this->requireAjaxHeader();
+        if ($blocked !== null) {
             return $blocked;
         }
 
@@ -672,7 +856,10 @@ class UsersController extends AppController
             ->withStringBody(json_encode(['success' => true]));
     }
 
-    public function session(): \Cake\Http\Response
+    /**
+     * Reports whether this browser is signed in, and as whom.
+     */
+    public function session(): Response
     {
         $session = $this->request->getSession();
         $wasLoggedIn = $session->read('Auth.User') !== null;
@@ -698,11 +885,16 @@ class UsersController extends AppController
             ]));
     }
 
-    public function register()
+    /**
+     * Password sign-up. The account starts unverified and gets no session until
+     * the emailed code is entered at /api/verify-email.
+     */
+    public function register(): Response
     {
         $this->request->allowMethod(['post']);
 
-        if ($blocked = $this->requireAjaxHeader()) {
+        $blocked = $this->requireAjaxHeader();
+        if ($blocked !== null) {
             return $blocked;
         }
 
@@ -715,17 +907,28 @@ class UsersController extends AppController
                 return $this->json(['success' => false, 'message' => $passwordError], 422);
             }
 
-            $data['fname'] = $data['fname'] ?? '';
-            $data['lname'] = $data['lname'] ?? '';
-            $data['email'] = $data['email'] ?? '';
-            $data['user_name'] = $data['user_name'] ?? '';
-            $data['user_pass'] = password_hash($plainPassword, PASSWORD_DEFAULT);
-
-            $user = $this->Users->newEmptyEntity();
-            $user = $this->Users->patchEntity($user, $data);
+            // Profile fields only — anything else in the request (google_id,
+            // email_verified_at, …) is ignored. The account starts unverified.
+            $user = $this->Users->newEntity([
+                'fname' => $data['fname'] ?? '',
+                'lname' => $data['lname'] ?? '',
+                'email' => $data['email'] ?? '',
+                'user_name' => $data['user_name'] ?? '',
+            ]);
+            $user->user_pass = password_hash($plainPassword, PASSWORD_DEFAULT);
 
             if ($this->Users->save($user)) {
-                $response = ['success' => true, 'user' => $user];
+                // No session until the address is proven: the SPA asks for the
+                // emailed code and posts it to /api/verify-email (B3-V).
+                $this->sendVerificationCode(
+                    $user,
+                    'Welcome to CareerPass! Enter this code to confirm your email address '
+                    . 'and finish creating your account.',
+                );
+                $response = $this->needsVerification(
+                    $user,
+                    "We emailed a 6-digit code to {$user->email}. Enter it to finish creating your account.",
+                );
             } else {
                 $response = ['success' => false, 'errors' => $user->getErrors()];
             }
@@ -796,7 +999,8 @@ class UsersController extends AppController
     public function forgotPassword(): Response
     {
         $this->request->allowMethod(['post']);
-        if ($blocked = $this->requireAjaxHeader()) {
+        $blocked = $this->requireAjaxHeader();
+        if ($blocked !== null) {
             return $blocked;
         }
 
@@ -827,7 +1031,8 @@ class UsersController extends AppController
     public function resetPassword(): Response
     {
         $this->request->allowMethod(['post']);
-        if ($blocked = $this->requireAjaxHeader()) {
+        $blocked = $this->requireAjaxHeader();
+        if ($blocked !== null) {
             return $blocked;
         }
 
@@ -854,11 +1059,103 @@ class UsersController extends AppController
 
         $user->user_pass = password_hash($password, PASSWORD_DEFAULT);
         $user->session_token = bin2hex(random_bytes(20));
+        if (!$user->isEmailVerified()) {
+            // The emailed reset code proves the address, same as a verify code.
+            $user->email_verified_at = new DateTime();
+            $this->fetchTable('AuthCodes')->deleteAll([
+                'user_id' => (int)$user->user_id,
+                'purpose' => self::PURPOSE_VERIFY_EMAIL,
+            ]);
+        }
         $this->Users->save($user);
 
         return $this->json([
             'success' => true,
             'message' => 'Password updated. You can sign in now.',
+        ]);
+    }
+
+    /**
+     * Completes sign-up (or a sign-in that was held back) for an account that
+     * hasn't proven its email yet: checks the emailed `verify_email` code, marks
+     * the address verified and starts the session. A wrong, expired or used
+     * code, an unknown email and an already-verified account all get the same
+     * answer.
+     */
+    public function verifyEmail(): Response
+    {
+        $this->request->allowMethod(['post']);
+        $blocked = $this->requireAjaxHeader();
+        if ($blocked !== null) {
+            return $blocked;
+        }
+
+        $email = trim((string)$this->request->getData('email'));
+        $code = trim((string)$this->request->getData('code'));
+
+        try {
+            $user = $email !== ''
+                ? $this->Users->find()->where(['email' => $email])->first()
+                : null;
+
+            if (
+                !$user
+                || $user->isEmailVerified()
+                || $code === ''
+                || !$this->consumeCode((int)$user->user_id, self::PURPOSE_VERIFY_EMAIL, $code)
+            ) {
+                return $this->json(
+                    ['success' => false, 'message' => 'That code is wrong or has expired. Request a new one.'],
+                    400,
+                );
+            }
+
+            $user->email_verified_at = new DateTime();
+            $this->recordLoginEvent((int)$user->user_id);
+            // startSession() saves the user, persisting email_verified_at too.
+            $this->startSession($user);
+
+            return $this->json(['success' => true, 'user' => $this->withPurchases($user)]);
+        } catch (Throwable $e) {
+            return $this->serverError($e);
+        }
+    }
+
+    /**
+     * Sends a new verification code (replacing the old one) to an account that
+     * still needs one, subject to the cooldown and daily cap. Always gives the
+     * same answer, so it can't be used to learn which emails are registered or
+     * verified.
+     */
+    public function resendVerification(): Response
+    {
+        $this->request->allowMethod(['post']);
+        $blocked = $this->requireAjaxHeader();
+        if ($blocked !== null) {
+            return $blocked;
+        }
+
+        $email = trim((string)$this->request->getData('email'));
+
+        try {
+            $user = $email !== ''
+                ? $this->Users->find()->where(['email' => $email])->first()
+                : null;
+
+            if ($user && !$user->isEmailVerified()) {
+                $this->sendVerificationCode(
+                    $user,
+                    'Here is a new code to confirm your email address for CareerPass.',
+                );
+            }
+        } catch (Throwable $e) {
+            return $this->serverError($e);
+        }
+
+        return $this->json([
+            'success' => true,
+            'message' => 'If that account still needs verifying, a new code is on its way. '
+                . 'You can request a new code once a minute.',
         ]);
     }
 
@@ -870,7 +1167,8 @@ class UsersController extends AppController
     public function changePassword(): Response
     {
         $this->request->allowMethod(['post']);
-        if ($blocked = $this->requireAjaxHeader()) {
+        $blocked = $this->requireAjaxHeader();
+        if ($blocked !== null) {
             return $blocked;
         }
 
@@ -917,7 +1215,7 @@ class UsersController extends AppController
         $session->write('Auth.User', $user);
 
         $this->sendMail(
-            $user->email,
+            (string)$user->email,
             'Your CareerPass password was changed',
             "Your CareerPass password was just changed and other devices were signed out.\n\n"
             . "If this wasn't you, reset your password immediately using \"Forgot password\" on the sign-in screen.",
