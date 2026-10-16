@@ -27,6 +27,11 @@ use RuntimeException;
  *   callbacks racing for the same pass grant it once;
  * - every write is checked; a failed write throws and rolls back.
  *
+ * An `expired` pass is re-checked too: a payment made right at expiry can be
+ * confirmed after the EXPIRED notification was already applied. If Xendit
+ * then shows the invoice paid (same checks as above), the pass is granted
+ * late (`WHERE status = 'expired'`) instead of the money going unhonored.
+ *
  * Xendit being unreachable surfaces as App\Payment\XenditException, which
  * callers treat as "try again later".
  */
@@ -39,6 +44,10 @@ class PassService
     public const STILL_PENDING = 'still_pending';
     public const MISMATCH = 'mismatch';
     public const INVOICE_NOT_FOUND = 'invoice_not_found';
+    /** An expired pass whose invoice Xendit now shows paid: granted after all. */
+    public const LATE_GRANTED = 'granted_late';
+    /** An expired pass whose invoice Xendit still doesn't show paid. */
+    public const EXPIRED_UNPAID = 'expired_unpaid';
 
     /** Xendit invoice statuses that mean "money received". */
     public const PAID_STATUSES = ['PAID', 'SETTLED'];
@@ -59,13 +68,14 @@ class PassService
      */
     public function reconcile(Pass $pass): string
     {
-        if ($pass->status !== 'pending') {
+        if ($pass->status !== 'pending' && $pass->status !== 'expired') {
+            // paid / superseded / failed: nothing Xendit can change.
             return self::ALREADY_HANDLED;
         }
 
         $invoice = $this->fetchInvoice($pass);
         if ($invoice === null) {
-            return self::INVOICE_NOT_FOUND;
+            return $pass->status === 'expired' ? self::ALREADY_HANDLED : self::INVOICE_NOT_FOUND;
         }
 
         return $this->applyInvoice($pass, $invoice);
@@ -89,7 +99,9 @@ class PassService
     }
 
     /**
-     * What applyInvoice() would do, without writing anything.
+     * What applyInvoice() would do, without writing anything. Decides on
+     * Xendit's invoice alone; for an `expired` pass only GRANTED leads to a
+     * change (see applyInvoice()).
      *
      * @param \App\Model\Entity\Pass $pass The pass.
      * @param array<string, mixed> $invoice Xendit's invoice record.
@@ -133,7 +145,17 @@ class PassService
             return self::MISMATCH;
         }
 
-        return match ($this->decide($pass, $invoice)) {
+        $decision = $this->decide($pass, $invoice);
+
+        if ($pass->status === 'expired') {
+            // Only a confirmed payment changes an expired pass; it is never
+            // closed again.
+            return $decision === self::GRANTED
+                ? $this->grant($pass, $invoice, 'expired')
+                : self::EXPIRED_UNPAID;
+        }
+
+        return match ($decision) {
             self::GRANTED => $this->grant($pass, $invoice),
             self::EXPIRED => $this->closePending($pass, 'expired', $invoice) ? self::EXPIRED : self::ALREADY_HANDLED,
             default => self::STILL_PENDING,
@@ -152,14 +174,16 @@ class PassService
     }
 
     /**
-     * Grants the pass: pending → paid with an expiry stacked on any active
-     * pass for the same (user, reviewer), which becomes `superseded`.
+     * Grants the pass: $from (pending, or expired for a late payment) → paid,
+     * with an expiry stacked on any active pass for the same (user, reviewer),
+     * which becomes `superseded`.
      *
      * @param \App\Model\Entity\Pass $pass The pass.
      * @param array<string, mixed> $invoice Xendit's invoice record.
-     * @return string GRANTED or ALREADY_HANDLED.
+     * @param string $from The status the pass must still have: `pending` or `expired`.
+     * @return string GRANTED (LATE_GRANTED when $from is `expired`) or ALREADY_HANDLED.
      */
-    private function grant(Pass $pass, array $invoice): string
+    private function grant(Pass $pass, array $invoice, string $from = 'pending'): string
     {
         $plan = Plans::get((string)$pass->plan_id);
         if ($plan === null) {
@@ -169,7 +193,8 @@ class PassService
             throw new LogicException("Pass {$pass->pass_id} has unknown plan '{$pass->plan_id}'.");
         }
 
-        return $this->passes->getConnection()->transactional(function () use ($pass, $plan, $invoice): string {
+        $connection = $this->passes->getConnection();
+        $result = $connection->transactional(function () use ($pass, $plan, $invoice, $from): string {
             $existing = $this->passes->activeForReviewer((int)$pass->user_id, (string)$pass->reviewer);
             $now = new DateTime();
             $base = $existing?->expires_at !== null && $existing->expires_at->isFuture()
@@ -183,7 +208,7 @@ class PassService
                     'expires_at' => $base->addDays($plan['days']),
                     'modified' => $now,
                 ] + $this->invoiceIdPatch($pass, $invoice),
-                ['pass_id' => $pass->pass_id, 'status' => 'pending'],
+                ['pass_id' => $pass->pass_id, 'status' => $from],
             );
             if ($claimed === 0) {
                 // Another callback (or the reconcile command) got here first.
@@ -202,8 +227,20 @@ class PassService
                 }
             }
 
-            return self::GRANTED;
+            return $from === 'expired' ? self::LATE_GRANTED : self::GRANTED;
         });
+
+        if ($result === self::LATE_GRANTED) {
+            // Error level so it always surfaces: money arrived after we had
+            // given up on the invoice, which is worth a human look.
+            Log::error(sprintf(
+                '[payments] pass %d (%s): payment confirmed after the pass was marked expired; granted late',
+                $pass->pass_id,
+                $pass->external_id,
+            ));
+        }
+
+        return $result;
     }
 
     /**

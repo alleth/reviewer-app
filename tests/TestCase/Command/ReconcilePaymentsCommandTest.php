@@ -165,6 +165,121 @@ class ReconcilePaymentsCommandTest extends TestCase
     }
 
     /**
+     * An expired pass created $hoursAgo hours ago.
+     *
+     * @param int $hoursAgo Age.
+     * @param array<string, mixed> $fields Overrides.
+     * @return \App\Model\Entity\Pass
+     */
+    private function expiredPass(int $hoursAgo, array $fields = []): Pass
+    {
+        return $this->pendingPass(60 * $hoursAgo, $fields + ['status' => 'expired']);
+    }
+
+    /**
+     * The EXPIRED notification won the race, then Xendit confirmed the
+     * payment and the PAID callback never got through: reconcile grants it.
+     */
+    public function testGrantsALatePaymentOnARecentlyExpiredPass(): void
+    {
+        $pass = $this->expiredPass(25);
+        $this->fakeXenditGetInvoice($this->xenditInvoiceFor($pass, 'PAID'));
+
+        $this->exec('reconcile_payments');
+
+        $this->assertExitSuccess();
+        $this->assertOutputContains('1 expired pass(es) from the last 48 h re-checked');
+        $this->assertOutputContains("pass {$pass->pass_id} ({$pass->external_id}): granted_late");
+        $this->assertOutputContains('granted_late=1');
+        $this->assertSame('paid', $this->passStatus($pass));
+    }
+
+    public function testDryRunReportsALatePaymentWithoutGrantingIt(): void
+    {
+        $pass = $this->expiredPass(25);
+        $this->fakeXenditGetInvoice($this->xenditInvoiceFor($pass, 'PAID'));
+
+        $this->exec('reconcile_payments --dry-run');
+
+        $this->assertExitSuccess();
+        $this->assertOutputContains('would_grant_late=1');
+        $this->assertSame('expired', $this->passStatus($pass));
+    }
+
+    /**
+     * Expired passes past --expired-max-age aren't looked up at all (no
+     * Xendit response is faked, so a lookup would fail the run).
+     */
+    public function testIgnoresExpiredPassesOlderThanExpiredMaxAge(): void
+    {
+        $old = $this->expiredPass(49);
+
+        $this->exec('reconcile_payments');
+
+        $this->assertExitSuccess();
+        $this->assertOutputContains('0 expired pass(es) from the last 48 h');
+        $this->assertSame('expired', $this->passStatus($old));
+    }
+
+    public function testExpiredMaxAgeIsConfigurable(): void
+    {
+        $pass = $this->expiredPass(49);
+        $this->fakeXenditGetInvoice($this->xenditInvoiceFor($pass, 'PAID'));
+
+        $this->exec('reconcile_payments --expired-max-age 72');
+
+        $this->assertExitSuccess();
+        $this->assertOutputContains('granted_late=1');
+        $this->assertSame('paid', $this->passStatus($pass));
+    }
+
+    /**
+     * Abandoned checkouts are the normal case: counted, not listed, not
+     * changed, and not a reason to alert.
+     */
+    public function testUnpaidExpiredPassesAreOnlyCounted(): void
+    {
+        $pass = $this->expiredPass(25);
+        $this->fakeXenditGetInvoice($this->xenditInvoiceFor($pass, 'EXPIRED'));
+
+        $this->exec('reconcile_payments');
+
+        $this->assertExitSuccess();
+        $this->assertOutputContains('expired_unpaid=1');
+        $this->assertOutputNotContains("pass {$pass->pass_id} (");
+        $this->assertSame('expired', $this->passStatus($pass));
+    }
+
+    /**
+     * A late payment whose invoice doesn't match the pass needs a human.
+     */
+    public function testLatePaymentMismatchNeedsAttention(): void
+    {
+        $pass = $this->expiredPass(25);
+        $this->fakeXenditGetInvoice($this->xenditInvoiceFor($pass, 'PAID', ['amount' => 1.0, 'paid_amount' => 1.0]));
+
+        $this->exec('reconcile_payments');
+
+        $this->assertExitError();
+        $this->assertErrorContains('1 pass(es) need attention');
+        $this->assertSame('expired', $this->passStatus($pass));
+    }
+
+    public function testLateGrantIsIdempotent(): void
+    {
+        $pass = $this->expiredPass(25);
+        $this->fakeXenditGetInvoice($this->xenditInvoiceFor($pass, 'PAID'));
+
+        $this->exec('reconcile_payments');
+        $expiry = $this->getTableLocator()->get('Passes')->get($pass->pass_id)->expires_at;
+        $this->exec('reconcile_payments');
+
+        $this->assertExitSuccess();
+        $this->assertOutputContains('0 expired pass(es)');
+        $this->assertEquals($expiry, $this->getTableLocator()->get('Passes')->get($pass->pass_id)->expires_at);
+    }
+
+    /**
      * Running twice is safe: the second run finds nothing left to do.
      */
     public function testIsIdempotent(): void
