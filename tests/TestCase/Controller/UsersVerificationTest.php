@@ -3,10 +3,12 @@ declare(strict_types=1);
 
 namespace App\Test\TestCase\Controller;
 
+use App\Auth\GoogleTokenVerifier;
 use App\Auth\GoogleTokenVerifierInterface;
 use App\Auth\InvalidGoogleCredentialException;
 use App\Model\Entity\User;
 use App\Test\TestSuite\ApiTestTrait;
+use App\Test\TestSuite\GoogleKeysTestTrait;
 use Cake\Event\EventInterface;
 use Cake\I18n\DateTime;
 use Cake\Log\Engine\ArrayLog;
@@ -28,6 +30,7 @@ use Cake\TestSuite\TestCase;
 class UsersVerificationTest extends TestCase
 {
     use ApiTestTrait;
+    use GoogleKeysTestTrait;
     use IntegrationTestTrait;
 
     /**
@@ -628,6 +631,28 @@ class UsersVerificationTest extends TestCase
         $this->ajaxPost('/api/google-login', ['credential' => 'token']);
 
         $this->assertResponseCode(401);
+    }
+
+    public function testTokenSignedByAnUnknownKeyIs401WithoutAnErrorLog(): void
+    {
+        // The real verifier, with Google's key set served locally. Staging
+        // returned a 500 (and logged a stack trace) for this before.
+        $http = $this->googleKeysHttp();
+        $this->mockService(GoogleTokenVerifierInterface::class, fn() => new GoogleTokenVerifier($http));
+        Log::setConfig('test_errors', ['className' => 'Array', 'levels' => ['error']]);
+
+        try {
+            $this->ajaxPost('/api/google-login', ['credential' => $this->fakeIdToken('no-such-key')]);
+
+            $this->assertResponseCode(401);
+            $this->assertSame('Invalid Google token', $this->responseJson()['message']);
+            $this->assertSessionNotHasKey('Auth.User');
+            $engine = Log::engine('test_errors');
+            $this->assertInstanceOf(ArrayLog::class, $engine);
+            $this->assertSame([], $engine->read(), 'An invalid token is not a server error');
+        } finally {
+            Log::drop('test_errors');
+        }
     }
 
     public function testMalformedGoogleCredentialIs400(): void
