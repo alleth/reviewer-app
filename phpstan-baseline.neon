@@ -16,6 +16,11 @@ parameters:
 			path: src/Command/ImportTopicReviewsCommand.php
 
 		-
+			message: "#^Call to static method customizeCodeceptionBinary\\(\\) on an unknown class Cake\\\\Codeception\\\\Console\\\\Installer\\.$#"
+			count: 1
+			path: src/Console/Installer.php
+
+		-
 			message: "#^Method App\\\\Controller\\\\Api\\\\LoginController\\:\\:logout\\(\\) has no return type specified\\.$#"
 			count: 1
 			path: src/Controller/Api/LoginController.php
@@ -57,26 +62,6 @@ parameters:
 
 		-
 			message: "#^Access to an undefined property Cake\\\\Datasource\\\\EntityInterface\\:\\:\\$email\\.$#"
-			count: 1
-			path: src/Controller/PaymentsController.php
-
-		-
-			message: "#^Access to an undefined property Cake\\\\Datasource\\\\EntityInterface\\:\\:\\$external_id\\.$#"
-			count: 3
-			path: src/Controller/PaymentsController.php
-
-		-
-			message: "#^Access to an undefined property Cake\\\\Datasource\\\\EntityInterface\\:\\:\\$invoice_url\\.$#"
-			count: 1
-			path: src/Controller/PaymentsController.php
-
-		-
-			message: "#^Access to an undefined property Cake\\\\Datasource\\\\EntityInterface\\:\\:\\$xendit_invoice_id\\.$#"
-			count: 1
-			path: src/Controller/PaymentsController.php
-
-		-
-			message: "#^Call to an undefined method Cake\\\\ORM\\\\Table\\:\\:activeForReviewer\\(\\)\\.$#"
 			count: 1
 			path: src/Controller/PaymentsController.php
 
