@@ -103,4 +103,15 @@ export function submitAnswer(questionId, choiceId) {
         .then((res) => res.data);
 }
 
+/**
+ * One step of changing the account's email (H3). Every step sends `new_email`;
+ * add `current_password` (or, without a password, `current_code`) to
+ * re-authenticate, then `code` from the new inbox to confirm. Resolves to the
+ * response body (`needsCurrentCode`, `needsCode`, or `success` + `user`);
+ * rejects on a 4xx/5xx, with the server's message in `err.response.data`.
+ */
+export function changeEmail(body) {
+    return api.post('/api/account/email', body).then((res) => res.data);
+}
+
 export default API_URL;

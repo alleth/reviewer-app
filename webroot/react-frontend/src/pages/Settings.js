@@ -8,7 +8,7 @@ import {
     FaUser,
     FaLock,
 } from 'react-icons/fa6';
-import { api, fetchBillingHistory } from '../api';
+import { api, changeEmail, fetchBillingHistory } from '../api';
 import { getPurchases, daysLeft } from '../reviewers';
 
 const peso = (amount, currency = 'PHP') =>
@@ -172,6 +172,135 @@ function ChangePasswordForm() {
     );
 }
 
+/**
+ * Changing the account email (H3). With a password: new address + current
+ * password → code from the new inbox. Without one (Google-only): new address →
+ * code from the current inbox → code from the new inbox. Each code only works
+ * for the address typed here, so the address can't be edited mid-way; Cancel
+ * starts over.
+ */
+function ChangeEmailPanel({ passwordSet, onChanged }) {
+    // closed | enter | current (code from the current inbox) | code (from the new one)
+    const [step, setStep] = useState('closed');
+    const [newEmail, setNewEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [currentCode, setCurrentCode] = useState('');
+    const [code, setCode] = useState('');
+    const [msg, setMsg] = useState(null); // { type, text }
+    const [busy, setBusy] = useState(false);
+
+    const reset = () => {
+        setStep('closed');
+        setNewEmail(''); setPassword(''); setCurrentCode(''); setCode('');
+    };
+
+    // The request that (re)sends the new-address code: the re-authentication step.
+    const reauthBody = () => (passwordSet
+        ? { new_email: newEmail, current_password: password }
+        : { new_email: newEmail, current_code: currentCode });
+
+    const send = async (body) => {
+        setBusy(true);
+        setMsg(null);
+        try {
+            const data = await changeEmail(body);
+            if (data.success) {
+                onChanged(data.user);
+                reset();
+                setMsg({ type: 'ok', text: data.message || 'Email changed.' });
+            } else if (data.needsCurrentCode) {
+                setStep('current');
+                setMsg({ type: 'info', text: data.message });
+            } else if (data.needsCode) {
+                setStep('code');
+                setMsg({ type: 'info', text: data.message });
+            } else {
+                setMsg({ type: 'err', text: data.message || 'Could not change your email.' });
+            }
+        } catch (err) {
+            setMsg({ type: 'err', text: err.response?.data?.message || 'Could not reach the server. Try again.' });
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const submit = (e) => {
+        e.preventDefault();
+        if (step === 'enter') send(passwordSet ? reauthBody() : { new_email: newEmail });
+        else if (step === 'current') send(reauthBody());
+        else if (step === 'code') send({ new_email: newEmail, code });
+    };
+
+    const resend = () => {
+        if (step === 'current') send({ new_email: newEmail });
+        else send(reauthBody());
+    };
+
+    const msgClass = msg?.type === 'err'
+        ? 'text-red-600 dark:text-red-400'
+        : msg?.type === 'ok' ? 'text-brand-dark dark:text-brand' : 'text-gray-600 dark:text-gray-300';
+
+    return (
+        <div className="mt-2">
+            {step === 'closed' && (
+                <button type="button" className="btn-link" onClick={() => { setStep('enter'); setMsg(null); }}>
+                    Change email
+                </button>
+            )}
+            {msg && <p className={`mt-2 text-sm ${msgClass}`}>{msg.text}</p>}
+            {step !== 'closed' && (
+                <form onSubmit={submit} className="mt-3 space-y-3">
+                    <div>
+                        <label className="form-label">New email address</label>
+                        <input
+                            type="email"
+                            value={newEmail}
+                            onChange={(e) => setNewEmail(e.target.value)}
+                            required
+                            disabled={step !== 'enter'}
+                            className="form-input"
+                        />
+                    </div>
+                    {step === 'enter' && passwordSet && (
+                        <div>
+                            <label className="form-label">Current password</label>
+                            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="form-input" />
+                        </div>
+                    )}
+                    {step === 'current' && (
+                        <div>
+                            <label className="form-label">Code from your current email</label>
+                            <input inputMode="numeric" autoComplete="one-time-code" value={currentCode} onChange={(e) => setCurrentCode(e.target.value)} required className="form-input" />
+                        </div>
+                    )}
+                    {step === 'code' && (
+                        <div>
+                            <label className="form-label">Code from your new email</label>
+                            <input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} required className="form-input" />
+                        </div>
+                    )}
+                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                        Changing your email signs you out on every other device.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                        <button type="submit" className="btn-primary" disabled={busy}>
+                            {busy ? 'Please wait…' : step === 'enter' ? 'Send code' : step === 'current' ? 'Continue' : 'Confirm change'}
+                        </button>
+                        {step !== 'enter' && (
+                            <button type="button" className="btn-outline" onClick={resend} disabled={busy}>
+                                Send a new code
+                            </button>
+                        )}
+                        <button type="button" className="btn-outline" onClick={() => { reset(); setMsg(null); }} disabled={busy}>
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            )}
+        </div>
+    );
+}
+
 function Section({ icon: Icon, title, desc, children }) {
     return (
         <section className="card p-5 sm:p-6">
@@ -195,8 +324,9 @@ export default function Settings() {
         fname: user?.fname || '',
         lname: user?.lname || '',
         user_name: user?.user_name || '',
-        email: user?.email || '',
     });
+    // Changed only through ChangeEmailPanel (H3), never by the profile form.
+    const [email, setEmail] = useState(user?.email || '');
     const [status, setStatus] = useState(null); // { type: 'ok' | 'err', msg }
     const [saving, setSaving] = useState(false);
 
@@ -229,6 +359,13 @@ export default function Settings() {
         }
     };
 
+    const emailChanged = (updated) => {
+        try {
+            localStorage.setItem('skillsprint_user', JSON.stringify(updated));
+        } catch (e) { /* ignore */ }
+        setEmail(updated?.email || '');
+    };
+
     const purchase = getPurchases(user)[0] || null;
     // Prefer the backend flag; before it's wired, infer from whether this is a
     // Google-only account (those start without a password).
@@ -259,11 +396,6 @@ export default function Settings() {
                             <label className="form-label">Username</label>
                             <input name="user_name" value={form.user_name} onChange={change} className="form-input" required />
                         </div>
-                        <div>
-                            <label className="form-label">Email</label>
-                            <input name="email" type="email" value={form.email} onChange={change} className="form-input" required />
-                        </div>
-
                         {status && (
                             <p className={`text-sm ${status.type === 'ok' ? 'text-brand-dark dark:text-brand' : 'text-red-600 dark:text-red-400'}`}>
                                 {status.msg}
@@ -274,6 +406,13 @@ export default function Settings() {
                             {saving ? 'Saving…' : 'Save changes'}
                         </button>
                     </form>
+
+                    {/* Outside the profile form: the panel has its own form. */}
+                    <div className="mt-6 border-t border-gray-100 pt-5 dark:border-gray-800">
+                        <p className="form-label">Email</p>
+                        <p className="text-sm text-gray-900 dark:text-gray-100">{email}</p>
+                        <ChangeEmailPanel passwordSet={passwordSet} onChanged={emailChanged} />
+                    </div>
                 </Section>
 
                 {/* Security */}
