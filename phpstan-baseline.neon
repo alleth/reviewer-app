@@ -41,26 +41,6 @@ parameters:
 			path: src/Controller/Api/LoginController.php
 
 		-
-			message: "#^Access to an undefined property App\\\\Controller\\\\Api\\\\QuestionsController\\:\\:\\$Questions\\.$#"
-			count: 14
-			path: src/Controller/Api/QuestionsController.php
-
-		-
-			message: "#^Parameter \\#1 \\$string of method Cake\\\\Http\\\\Response\\:\\:withStringBody\\(\\) expects string\\|null, string\\|false given\\.$#"
-			count: 9
-			path: src/Controller/Api/QuestionsController.php
-
-		-
-			message: "#^Access to an undefined property App\\\\Controller\\\\Api\\\\TopicsController\\:\\:\\$Topics\\.$#"
-			count: 11
-			path: src/Controller/Api/TopicsController.php
-
-		-
-			message: "#^Parameter \\#1 \\$string of method Cake\\\\Http\\\\Response\\:\\:withStringBody\\(\\) expects string\\|null, string\\|false given\\.$#"
-			count: 8
-			path: src/Controller/Api/TopicsController.php
-
-		-
 			message: "#^Access to an undefined property Cake\\\\Datasource\\\\EntityInterface\\:\\:\\$email\\.$#"
 			count: 1
 			path: src/Controller/PaymentsController.php

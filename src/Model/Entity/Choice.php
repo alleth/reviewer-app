@@ -17,6 +17,18 @@ use Cake\ORM\Entity;
  */
 class Choice extends Entity
 {
+    /**
+     * Never serialize which choice is correct (H2). The answer key is only
+     * revealed one question at a time, after answering, by
+     * Api\QuestionsController::answer(), which reads the field explicitly.
+     *
+     * @var list<string>
+     */
+    protected array $_hidden = ['is_correct'];
+
+    /**
+     * @var array<string, bool>
+     */
     protected array $_accessible = [
         'question_id' => true,
         'choice_text' => true,

@@ -28,10 +28,16 @@ return function (RouteBuilder $routes): void {
 
     // API resource routes (controllers in App\Controller\Api namespace)
     $routes->prefix('api', function (RouteBuilder $builder): void {
-        // Custom action must be defined before resources() to avoid 'practice' being matched as an ID
+        // Questions are only reachable as practice sets and one-at-a-time answer
+        // checks (H2): there is deliberately no index/view, so the bank and its
+        // answer key can't be listed.
         $builder->connect('/questions/practice', ['controller' => 'Questions', 'action' => 'practice']);
+        $builder->connect(
+            '/questions/{id}/answer',
+            ['controller' => 'Questions', 'action' => 'answer'],
+            ['pass' => ['id'], 'id' => '\d+'],
+        );
         $builder->resources('Topics');
-        $builder->resources('Questions');
     });
 
     // Default routes
