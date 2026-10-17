@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { deadSessionReason, rememberSignedOut } from './sessionErrors';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost/reviewer_app';
 
@@ -18,6 +19,25 @@ export const api = axios.create({
     withCredentials: true,
     headers: { 'X-Requested-With': 'XMLHttpRequest' },
 });
+
+// A paid-content request answered 401 means this device's session is dead —
+// usually because the account signed in on another device (H1). Sign out here
+// and go to the landing page, which explains why. Only content-endpoint 401s
+// count (see deadSessionReason); every other failure is left to its caller.
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        const reason = deadSessionReason(error);
+        if (reason) {
+            try {
+                localStorage.removeItem('skillsprint_user');
+            } catch (e) { /* ignore */ }
+            rememberSignedOut(reason);
+            window.location.assign('/');
+        }
+        return Promise.reject(error);
+    },
+);
 
 /**
  * Starts a Xendit checkout for one access pass and redirects the browser to the

@@ -386,32 +386,6 @@ class UsersController extends AppController
     }
 
     /**
-     * Lightweight CSRF gate for the state-changing auth actions. This app has no CSRF
-     * middleware (removed entirely so the cross-origin SPA can POST at all) and session
-     * cookies are SameSite=None (required for the same reason) — so without this, any
-     * other website could trigger these actions using a visitor's session cookie via a
-     * plain <form> POST.
-     *
-     * A plain HTML form cannot set custom request headers, only fetch/XHR can — and a
-     * cross-origin fetch/XHR triggers a CORS preflight, which CorsMiddleware only allows
-     * for FRONTEND_URL. So requiring this header turns the CORS policy we already have
-     * into an effective CSRF check, without needing a separate token scheme.
-     *
-     * @return \Cake\Http\Response|null A 403 response if the header is missing, null to continue.
-     */
-    private function requireAjaxHeader(): ?Response
-    {
-        if ($this->request->getHeaderLine('X-Requested-With') !== 'XMLHttpRequest') {
-            return $this->response
-                ->withStatus(403)
-                ->withType('application/json')
-                ->withStringBody(json_encode(['success' => false, 'message' => 'Missing required request header']));
-        }
-
-        return null;
-    }
-
-    /**
      * Establishes a fresh single-device session for $user: rotates the account's
      * session_token (which invalidates any session on another device), and
      * writes the user + token into this session.
@@ -432,43 +406,6 @@ class UsersController extends AppController
         $session->renew();
         $session->write('Auth.User', $user);
         $session->write('Auth.token', $token);
-    }
-
-    /**
-     * The logged-in user's id, or null when there's no session — or when this
-     * session has been superseded by a login on another device (in which case
-     * the stale session is cleared here). Sessions created before session_token
-     * existed are grandfathered in until their next login.
-     */
-    private function activeUserId(): ?int
-    {
-        $session = $this->request->getSession();
-        $user = $session->read('Auth.User');
-        if (!$user) {
-            return null;
-        }
-
-        $sessionToken = $session->read('Auth.token');
-        $current = $this->Users->find()
-            ->select(['user_id', 'session_token'])
-            ->where(['user_id' => $user->user_id])
-            ->first();
-        $dbToken = $current?->session_token;
-
-        // Pre-rollout session (neither side has a token yet) — leave it be.
-        if ($sessionToken === null && $dbToken === null) {
-            return (int)$user->user_id;
-        }
-
-        if (!$current || $sessionToken === null || $sessionToken !== $dbToken) {
-            $session->delete('Auth.User');
-            $session->delete('Auth.token');
-            $session->renew();
-
-            return null;
-        }
-
-        return (int)$user->user_id;
     }
 
     /**
@@ -706,10 +643,7 @@ class UsersController extends AppController
 
         $userId = $this->activeUserId();
         if (!$userId) {
-            return $this->response
-                ->withStatus(401)
-                ->withType('application/json')
-                ->withStringBody(json_encode(['success' => false, 'message' => 'Not logged in']));
+            return $this->notLoggedIn();
         }
 
         try {
@@ -799,10 +733,7 @@ class UsersController extends AppController
 
         $userId = $this->activeUserId();
         if (!$userId) {
-            return $this->response
-                ->withStatus(401)
-                ->withType('application/json')
-                ->withStringBody(json_encode(['success' => false, 'message' => 'Not logged in']));
+            return $this->notLoggedIn();
         }
 
         try {
@@ -869,9 +800,10 @@ class UsersController extends AppController
         if ($user) {
             $this->withPurchases($user);
         }
-        // Set when this device was signed out because the account signed in
-        // somewhere else — lets the SPA show a message.
-        $supersededElsewhere = $wasLoggedIn && $user === null;
+        // Set when this device had a session that is no longer usable, saying
+        // why (`signed_in_elsewhere`, or `signed_out` e.g. for a deleted or
+        // unverified account) — lets the SPA show the right message.
+        $reason = $wasLoggedIn && $user === null ? $this->sessionDenialReason : null;
 
         return $this->response
             ->withType('application/json')
@@ -881,7 +813,7 @@ class UsersController extends AppController
                 'success' => true,
                 'loggedIn' => $user !== null,
                 'user' => $user,
-                'reason' => $supersededElsewhere ? 'signed_in_elsewhere' : null,
+                'reason' => $reason,
             ]));
     }
 
@@ -939,17 +871,6 @@ class UsersController extends AppController
         return $this->response
             ->withType('application/json')
             ->withStringBody(json_encode($response));
-    }
-
-    /**
-     * @param array<string, mixed> $body
-     */
-    private function json(array $body, int $status = 200): Response
-    {
-        return $this->response
-            ->withStatus($status)
-            ->withType('application/json')
-            ->withStringBody(json_encode($body));
     }
 
     /**
@@ -1174,7 +1095,7 @@ class UsersController extends AppController
 
         $userId = $this->activeUserId();
         if (!$userId) {
-            return $this->json(['success' => false, 'message' => 'Not logged in'], 401);
+            return $this->notLoggedIn();
         }
 
         $data = $this->request->getData();
