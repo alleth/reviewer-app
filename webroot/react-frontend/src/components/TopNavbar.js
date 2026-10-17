@@ -6,13 +6,15 @@ import Logo from './ui/Logo';
 import ThemeToggle from './ui/ThemeToggle';
 
 const onLogout = async () => {
+    // Clear the stored user first, so a session check still in flight can't
+    // mistake this sign-out for an expired session (see index.js).
+    localStorage.removeItem('skillsprint_user');
     try {
         await api.post('/api/logout');
-        localStorage.removeItem('skillsprint_user');
-        window.location.href = '/';
     } catch (error) {
         console.error('Logout failed:', error);
     }
+    window.location.href = '/';
 };
 
 const TopNavbar = ({ userName }) => {

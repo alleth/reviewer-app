@@ -13,6 +13,7 @@ import App from './App'; // <- Guest route handler
 import './theme'; // initialise theme store (applies the `dark` class on load)
 import './index.css';
 import API_URL from './api';
+import { rememberSignedOut } from './sessionErrors';
 
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
 
@@ -44,12 +45,15 @@ function AppWrapper() {
                         setIsLoggedIn(true);
                         return;
                     }
-                    localStorage.removeItem('skillsprint_user');
-                    if (res.data.reason === 'signed_in_elsewhere') {
-                        try {
-                            sessionStorage.setItem('careerpass_signed_out', 'elsewhere');
-                        } catch (e) { /* ignore */ }
+                    // A stored user means this device had a live session, so say why
+                    // it ended: "signed in on another device", or — for any other
+                    // reason (expired, a deploy, B4) — "no longer valid". Re-read
+                    // storage: a sign-out clicked while this check was in flight has
+                    // already cleared it, and that must not show a notice.
+                    if (localStorage.getItem('skillsprint_user')) {
+                        rememberSignedOut(res.data.reason);
                     }
+                    localStorage.removeItem('skillsprint_user');
                     // If this device had a live session that's now gone, do a full
                     // reload to the landing page rather than leaving a logged-in
                     // route rendering with no session behind it.

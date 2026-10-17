@@ -6,6 +6,7 @@ import Logo from '../components/ui/Logo';
 import ThemeToggle from '../components/ui/ThemeToggle';
 import LoginPage from './LoginPage';
 import SiteFooter from '../components/SiteFooter';
+import { SIGNED_OUT_KEY } from '../sessionErrors';
 
 const newsColumns = [
     {
@@ -45,7 +46,9 @@ const LandingPage = () => {
     const [showModal, setShowModal] = useState(false);
     const [authMode, setAuthMode] = useState('login');
     const [showMenu, setShowMenu] = useState(false);
-    const [signedOutNotice, setSignedOutNotice] = useState(false);
+    // Why this device was just signed out, if it was ('elsewhere' | 'invalid'),
+    // set by index.js's session check or the content-request handler in api.js.
+    const [signedOutNotice, setSignedOutNotice] = useState(null);
 
     useEffect(() => {
         window.scrollTo(0, 0);
@@ -53,10 +56,11 @@ const LandingPage = () => {
 
     useEffect(() => {
         try {
-            if (sessionStorage.getItem('careerpass_signed_out') === 'elsewhere') {
-                setSignedOutNotice(true);
-                sessionStorage.removeItem('careerpass_signed_out');
+            const notice = sessionStorage.getItem(SIGNED_OUT_KEY);
+            if (notice === 'elsewhere' || notice === 'invalid') {
+                setSignedOutNotice(notice);
             }
+            sessionStorage.removeItem(SIGNED_OUT_KEY);
         } catch (e) { /* ignore */ }
     }, []);
 
@@ -82,7 +86,9 @@ const LandingPage = () => {
             <div className="relative z-[2] flex-1">
                 {signedOutNotice && (
                     <div className="border-b border-amber-300 bg-amber-50 px-4 py-2.5 text-center text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300">
-                        You were signed out here because your account signed in on another device.
+                        {signedOutNotice === 'elsewhere'
+                            ? 'You signed in on another device.'
+                            : 'Your session is no longer valid. Please sign in again.'}
                     </div>
                 )}
                 {/* Header */}
