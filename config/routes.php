@@ -15,6 +15,7 @@ return function (RouteBuilder $routes): void {
     $routes->connect('/api/verify-email/resend', ['controller' => 'Users', 'action' => 'resendVerification']);
     $routes->connect('/api/google-login', ['controller' => 'Users', 'action' => 'googleLogin']);
     $routes->connect('/api/account/setup', ['controller' => 'Users', 'action' => 'setupAccount']);
+    $routes->connect('/api/account/email', ['controller' => 'Users', 'action' => 'changeEmail']);
     $routes->connect('/api/account', ['controller' => 'Users', 'action' => 'updateAccount']);
     $routes->connect('/api/password/forgot', ['controller' => 'Users', 'action' => 'forgotPassword']);
     $routes->connect('/api/password/reset', ['controller' => 'Users', 'action' => 'resetPassword']);

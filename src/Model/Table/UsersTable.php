@@ -3,9 +3,14 @@ declare(strict_types=1);
 
 namespace App\Model\Table;
 
+use App\Model\Entity\User;
+use Cake\Database\Expression\FunctionExpression;
+use Cake\Database\Expression\QueryExpression;
+use Cake\Datasource\EntityInterface;
 use Cake\ORM\RulesChecker;
 use Cake\ORM\Table;
 use Cake\Validation\Validator;
+use Closure;
 
 /**
  * Users Model
@@ -94,16 +99,92 @@ class UsersTable extends Table
     }
 
     /**
-     * Application integrity rules: email and username are each unique.
+     * Application integrity rules: email and username are each unique. Email
+     * uniqueness ignores letter case (see emailTaken()).
      *
      * @param \Cake\ORM\RulesChecker $rules The rules object to be modified.
      * @return \Cake\ORM\RulesChecker
      */
     public function buildRules(RulesChecker $rules): RulesChecker
     {
-        $rules->add($rules->isUnique(['email'], 'This email is already registered.'));
+        $rules->add(
+            function (EntityInterface $entity): bool {
+                $email = $entity->get('email');
+                if (!is_string($email) || (!$entity->isNew() && !$entity->isDirty('email'))) {
+                    return true;
+                }
+                $userId = $entity->isNew() ? null : (int)$entity->get('user_id');
+
+                return !$this->emailTaken($email, $userId);
+            },
+            'uniqueEmail',
+            ['errorField' => 'email', 'message' => 'This email is already registered.'],
+        );
         $rules->add($rules->isUnique(['user_name'], 'This username is already taken.'));
 
         return $rules;
+    }
+
+    /**
+     * The form every email comparison uses: trimmed and lowercased. Addresses
+     * are stored as the user typed them, but two that differ only in letter
+     * case are the same address everywhere — production's MySQL collation
+     * already compares them that way, and SQLite (the test database) doesn't,
+     * so the app never relies on the database for it.
+     *
+     * Accents are not folded here, but production's collation
+     * (utf8mb4_0900_ai_ci) also treats "é" and "e" as equal, so two addresses
+     * differing only by an accent still hit the `users_email` unique index;
+     * that surfaces as "This email is already registered." (accepted, H3 I4).
+     */
+    public static function normalizeEmail(string $email): string
+    {
+        return mb_strtolower(trim($email));
+    }
+
+    /**
+     * The account with this email address, ignoring letter case, or null.
+     */
+    public function findByEmailAddress(string $email): ?User
+    {
+        $normalized = self::normalizeEmail($email);
+        if ($normalized === '') {
+            return null;
+        }
+
+        /** @var \App\Model\Entity\User|null $user */
+        $user = $this->find()->where($this->emailIs($normalized))->first();
+
+        return $user;
+    }
+
+    /**
+     * Whether another account (not $exceptUserId) already has this email
+     * address, ignoring letter case.
+     */
+    public function emailTaken(string $email, ?int $exceptUserId = null): bool
+    {
+        $normalized = self::normalizeEmail($email);
+        if ($normalized === '') {
+            return false;
+        }
+
+        $query = $this->find()->where($this->emailIs($normalized));
+        if ($exceptUserId !== null) {
+            $query->where(['user_id !=' => $exceptUserId]);
+        }
+
+        return $query->count() > 0;
+    }
+
+    /**
+     * A condition matching rows whose email, lowercased, equals $normalized.
+     */
+    public function emailIs(string $normalized): Closure
+    {
+        return fn(QueryExpression $exp): QueryExpression => $exp->eq(
+            new FunctionExpression('LOWER', ['email' => 'identifier']),
+            $normalized,
+        );
     }
 }
