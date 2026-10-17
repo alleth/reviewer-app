@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Test\TestCase\Controller\Api;
 
 use App\Test\TestSuite\ApiTestTrait;
+use Cake\Core\Configure;
 use Cake\I18n\DateTime;
 use Cake\TestSuite\IntegrationTestTrait;
 use Cake\TestSuite\TestCase;
@@ -106,6 +107,9 @@ class QuestionsLockdownTest extends TestCase
     public function testTheBankCanNoLongerBeListedOrFetchedById(): void
     {
         $this->asPassHolder();
+        // The 404 production serves. The debug error page quotes source lines
+        // from the stack, including this test's own needle below.
+        Configure::write('debug', false);
 
         foreach (['/api/questions', '/api/questions/1'] as $url) {
             $this->asAjax();
