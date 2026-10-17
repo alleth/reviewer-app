@@ -41,14 +41,16 @@ class UsersController extends AppController
     private const LOGIN_FAILURE_WINDOW_MINUTES = 15;
 
     /**
-     * Email verification (B3-V). `verify_email` rows hold the code itself;
-     * `verify_email_sent` rows hold no code, one per email sent, and back the
-     * resend limits (a cooldown, and a daily cap that bounds code guessing).
+     * Codes sent through sendLimitedCode(): email verification (B3-V) and
+     * linking Google sign-in to an existing verified account (B3-L). Each
+     * purpose's rows hold the code itself; `<purpose>_sent` rows hold no code,
+     * one per email sent, and back the resend limits (a cooldown, and a daily
+     * cap that bounds code guessing and email spam).
      */
     private const PURPOSE_VERIFY_EMAIL = 'verify_email';
-    private const PURPOSE_VERIFY_EMAIL_SENT = 'verify_email_sent';
-    private const VERIFY_RESEND_COOLDOWN_SECONDS = 60;
-    private const VERIFY_MAX_CODES_PER_DAY = 10;
+    private const PURPOSE_LINK_GOOGLE = 'link_google';
+    private const CODE_RESEND_COOLDOWN_SECONDS = 60;
+    private const CODE_MAX_SENDS_PER_DAY = 10;
 
     /** A hash that stays stable per browser/device (used by the guard). */
     private function deviceHash(): string
@@ -290,46 +292,121 @@ class UsersController extends AppController
     }
 
     /**
-     * Emails a fresh `verify_email` code to an unverified account — unless one
-     * went out in the last VERIFY_RESEND_COOLDOWN_SECONDS, or the account has
-     * already been sent VERIFY_MAX_CODES_PER_DAY in 24 hours (with 5 guesses a
-     * code, that caps guessing at 50 a day). Every send leaves a code-less
-     * `verify_email_sent` row, so both limits survive issueCode() replacing the
+     * Emails a fresh `$purpose` code to the account — unless one went out in
+     * the last CODE_RESEND_COOLDOWN_SECONDS, or the account has already been
+     * sent CODE_MAX_SENDS_PER_DAY for this purpose in 24 hours (with 5 guesses
+     * a code, that caps guessing at 50 a day, and bounds how much mail anyone
+     * can make the inbox receive). Every send leaves a code-less
+     * `<purpose>_sent` row, so both limits survive issueCode() replacing the
      * code. Callers answer the same way whether or not a code went out.
      */
-    private function sendVerificationCode(User $user, string $intro): bool
+    private function sendLimitedCode(User $user, string $purpose, string $intro): bool
     {
         $userId = (int)$user->user_id;
+        $sentPurpose = $purpose . '_sent';
         $codes = $this->fetchTable('AuthCodes');
         $now = new DateTime();
 
         $codes->deleteAll([
             'user_id' => $userId,
-            'purpose' => self::PURPOSE_VERIFY_EMAIL_SENT,
+            'purpose' => $sentPurpose,
             'created <' => $now->modify('-1 day'),
         ]);
         $sent = $codes->find()
-            ->where(['user_id' => $userId, 'purpose' => self::PURPOSE_VERIFY_EMAIL_SENT])
+            ->where(['user_id' => $userId, 'purpose' => $sentPurpose])
             ->orderBy(['created' => 'DESC', 'auth_code_id' => 'DESC'])
             ->all();
         $last = $sent->first();
         $coolingDown = $last !== null
-            && $last->created->greaterThan($now->modify('-' . self::VERIFY_RESEND_COOLDOWN_SECONDS . ' seconds'));
-        if ($coolingDown || $sent->count() >= self::VERIFY_MAX_CODES_PER_DAY) {
+            && $last->created->greaterThan($now->modify('-' . self::CODE_RESEND_COOLDOWN_SECONDS . ' seconds'));
+        if ($coolingDown || $sent->count() >= self::CODE_MAX_SENDS_PER_DAY) {
             return false;
         }
 
         $codes->saveOrFail($codes->newEntity([
             'user_id' => $userId,
-            'purpose' => self::PURPOSE_VERIFY_EMAIL_SENT,
+            'purpose' => $sentPurpose,
             'code_hash' => '',
             'expires' => $now->modify('+1 day'),
             'attempts' => 0,
             'created' => $now,
         ]));
-        $this->sendAuthCode((string)$user->email, $this->issueCode($userId, self::PURPOSE_VERIFY_EMAIL), $intro);
+        $this->sendAuthCode((string)$user->email, $this->issueCode($userId, $purpose), $intro);
 
         return true;
+    }
+
+    /**
+     * B3-L: a Google login whose (Google-verified) email matches an existing
+     * **verified** account that isn't linked to this Google account. Google's
+     * "verified" flag says who controlled the address when it was checked, not
+     * who controls it now, so the link needs an emailed code first:
+     *
+     * - the account is linked to a *different* Google account → 409, nothing
+     *   sent or changed (relinking is never a side effect of signing in);
+     * - no `$code` yet → email a `link_google` code (cooldown/cap permitting)
+     *   and ask for it;
+     * - a wrong/expired/used code → 400;
+     * - the right code → attach `google_id`, send a "Google sign-in was added"
+     *   notice, and return null so googleLogin() signs in as usual.
+     *
+     * The second step re-sends the Google credential, which googleLogin()
+     * verifies again; nothing about the pending link is stored in the session.
+     *
+     * @return \Cake\Http\Response|null A response to send instead of signing in, or null once linked.
+     */
+    private function linkVerifiedAccount(User $user, string $googleId, string $code): ?Response
+    {
+        $userId = (int)$user->user_id;
+
+        if ($user->google_id !== null && $user->google_id !== '') {
+            Log::warning(
+                "[users] Google sign-in matched user {$userId} by email, but the account is linked to "
+                . 'a different Google account; refused (B3-L)',
+            );
+
+            return $this->json([
+                'success' => false,
+                'message' => 'This account is already connected to a different Google account. '
+                    . 'Sign in with that Google account or with your password.',
+            ], 409);
+        }
+
+        if ($code === '') {
+            $this->sendLimitedCode(
+                $user,
+                self::PURPOSE_LINK_GOOGLE,
+                'Someone is connecting Google sign-in to your CareerPass account. '
+                . 'If that is you, enter this code to finish.',
+            );
+
+            return $this->json([
+                'success' => false,
+                'needsLinkCode' => true,
+                'email' => $user->email,
+                'message' => "You already have a CareerPass account with {$user->email}. "
+                    . 'To connect Google sign-in, enter the 6-digit code we emailed you.',
+            ]);
+        }
+
+        if (!$this->consumeCode($userId, self::PURPOSE_LINK_GOOGLE, $code)) {
+            return $this->json(
+                ['success' => false, 'message' => 'That code is wrong or has expired. Request a new one.'],
+                400,
+            );
+        }
+
+        $user->google_id = $googleId;
+        $this->Users->saveOrFail($user);
+        $this->sendMail(
+            (string)$user->email,
+            'Google sign-in was added to your CareerPass account',
+            "Google sign-in was just connected to your CareerPass account ({$user->email}). "
+            . "You can now sign in with Google.\n\n"
+            . "If this wasn't you, reset your password immediately using \"Forgot password\" on the sign-in screen.",
+        );
+
+        return null;
     }
 
     /**
@@ -451,8 +528,9 @@ class UsersController extends AppController
                     : null;
                 if (!$user->isEmailVerified()) {
                     // No session until the email address is proven (B3-V).
-                    $this->sendVerificationCode(
+                    $this->sendLimitedCode(
                         $user,
+                        self::PURPOSE_VERIFY_EMAIL,
                         'Confirm your email address to finish signing in to CareerPass.',
                     );
                     $response = $this->needsVerification(
@@ -573,8 +651,18 @@ class UsersController extends AppController
                     $this->takeOverUnverifiedAccount($user, $googleId, $fname, $lname);
                     $isNewUser = true;
                 } elseif ($user) {
-                    $user->google_id = $googleId;
-                    $this->Users->save($user);
+                    // A verified account not linked to this Google account:
+                    // link only after an emailed code (B3-L). Until then — or
+                    // if it's linked to another Google account — answer
+                    // without signing in.
+                    $pending = $this->linkVerifiedAccount(
+                        $user,
+                        $googleId,
+                        trim((string)$this->request->getData('code')),
+                    );
+                    if ($pending !== null) {
+                        return $pending;
+                    }
                 }
             }
 
@@ -852,8 +940,9 @@ class UsersController extends AppController
             if ($this->Users->save($user)) {
                 // No session until the address is proven: the SPA asks for the
                 // emailed code and posts it to /api/verify-email (B3-V).
-                $this->sendVerificationCode(
+                $this->sendLimitedCode(
                     $user,
+                    self::PURPOSE_VERIFY_EMAIL,
                     'Welcome to CareerPass! Enter this code to confirm your email address '
                     . 'and finish creating your account.',
                 );
@@ -1064,8 +1153,9 @@ class UsersController extends AppController
                 : null;
 
             if ($user && !$user->isEmailVerified()) {
-                $this->sendVerificationCode(
+                $this->sendLimitedCode(
                     $user,
+                    self::PURPOSE_VERIFY_EMAIL,
                     'Here is a new code to confirm your email address for CareerPass.',
                 );
             }

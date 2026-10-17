@@ -27,6 +27,11 @@ function LoginPage({ mode = 'login', onClose }) {
     const [verifyEmail, setVerifyEmail] = useState(null);
     const [verifyCode, setVerifyCode] = useState('');
     const [notice, setNotice] = useState('');
+    // Set when google-login says this Google account matches an existing CareerPass
+    // account that needs an emailed code before Google sign-in is connected (B3-L).
+    // Holds the Google credential, because the code step sends it again.
+    const [linkPending, setLinkPending] = useState(null); // { credential, email, next }
+    const [linkCode, setLinkCode] = useState('');
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -138,24 +143,34 @@ function LoginPage({ mode = 'login', onClose }) {
         }
     };
 
-    const handleGoogleSuccess = async (credentialResponse) => {
-        try {
-            const res = await api.post('/api/google-login', {
-                credential: credentialResponse.credential,
-            });
+    // Shared by both Google buttons. `next` forces where to go after signing in
+    // (the setup prompt always continues to account setup); otherwise a brand-new
+    // Google sign-up gets the option to set a password now, instead of only
+    // finding out later when a manual login attempt fails.
+    const handleGoogleResult = (data, credential, next) => {
+        if (data.success) {
+            localStorage.setItem('skillsprint_user', JSON.stringify(data.user));
+            window.location.href = next || (data.isNewUser ? '/account-setup' : '/');
+        } else if (data.needsLinkCode) {
+            setLinkPending({ credential, email: data.email, next });
+            setLinkCode('');
+            setError('');
+            setNotice(data.message || 'Enter the 6-digit code we emailed you to connect Google sign-in.');
+        } else {
+            setError(data.message || 'Google sign-in failed');
+        }
+    };
 
-            if (res.data.success) {
-                localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));
-                // Brand-new Google sign-up: give them the option to set a password now,
-                // instead of only finding out later when a manual login attempt fails.
-                window.location.href = res.data.isNewUser ? '/account-setup' : '/';
-            } else {
-                setError(res.data.message || 'Google sign-in failed');
-            }
+    const signInWithGoogle = async (credential, next = null) => {
+        try {
+            const res = await api.post('/api/google-login', { credential });
+            handleGoogleResult(res.data, credential, next);
         } catch (err) {
             setError(err.response?.data?.message || 'Google sign-in failed. Please try again.');
         }
     };
+
+    const handleGoogleSuccess = (credentialResponse) => signInWithGoogle(credentialResponse.credential);
 
     const handleGoogleError = () => {
         setError('Google sign-in was cancelled or failed.');
@@ -163,20 +178,35 @@ function LoginPage({ mode = 'login', onClose }) {
 
     // Used only from the "this account needs setup" prompt below — always sends the
     // user to finish setting a password instead of straight to the dashboard.
-    const handleGoogleSetupSuccess = async (credentialResponse) => {
-        try {
-            const res = await api.post('/api/google-login', {
-                credential: credentialResponse.credential,
-            });
+    const handleGoogleSetupSuccess = (credentialResponse) =>
+        signInWithGoogle(credentialResponse.credential, '/account-setup');
 
+    // B3-L: the code step sends the same Google credential again, with the code.
+    const handleLinkVerify = async (e) => {
+        e.preventDefault();
+        try {
+            const res = await api.post('/api/google-login', { credential: linkPending.credential, code: linkCode });
             if (res.data.success) {
                 localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));
-                window.location.href = '/account-setup';
+                window.location.href = linkPending.next || '/';
             } else {
-                setError(res.data.message || 'Google sign-in failed');
+                setNotice('');
+                setError(res.data.message || 'That code is wrong or has expired.');
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Google sign-in failed. Please try again.');
+            setNotice('');
+            setError(err.response?.data?.message || 'Could not connect Google sign-in. Please try again.');
+        }
+    };
+
+    const handleLinkResend = async () => {
+        try {
+            await api.post('/api/google-login', { credential: linkPending.credential });
+            setError('');
+            setNotice('If a new code was due, it\'s on its way. You can request a new code once a minute.');
+        } catch (err) {
+            setNotice('');
+            setError(err.response?.data?.message || 'Could not send a new code. Please sign in with Google again.');
         }
     };
 
@@ -186,6 +216,66 @@ function LoginPage({ mode = 'login', onClose }) {
                 initialEmail={formData.username.includes('@') ? formData.username : ''}
                 onBackToLogin={() => setRecovering(false)}
             />
+        );
+    }
+
+    if (linkPending) {
+        return (
+            <div className="p-2">
+                <h4 className="mb-2 text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+                    Confirm it's you
+                </h4>
+                <p className="mb-4 text-center text-sm text-gray-500 dark:text-gray-400">{linkPending.email}</p>
+
+                {notice && (
+                    <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
+                        {notice}
+                    </div>
+                )}
+
+                {error && (
+                    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+                        {error}
+                    </div>
+                )}
+
+                <form onSubmit={handleLinkVerify} className="space-y-4">
+                    <div>
+                        <label className="form-label">6-digit code</label>
+                        <input
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            maxLength={6}
+                            value={linkCode}
+                            onChange={(e) => setLinkCode(e.target.value.replace(/\D/g, ''))}
+                            required
+                            className="form-input tracking-[0.4em]"
+                            autoFocus
+                        />
+                    </div>
+
+                    <button type="submit" className="btn-primary w-full py-2.5 text-base">
+                        Verify &amp; connect Google
+                    </button>
+                </form>
+
+                <button
+                    type="button"
+                    className="btn-link mt-4 w-full text-center"
+                    onClick={handleLinkResend}
+                >
+                    Send a new code
+                </button>
+
+                <button
+                    type="button"
+                    className="btn-link mt-2 w-full text-center text-gray-500 dark:text-gray-400"
+                    onClick={() => { setLinkPending(null); setNotice(''); setError(''); }}
+                >
+                    Cancel
+                </button>
+            </div>
         );
     }
 
