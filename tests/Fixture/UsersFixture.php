@@ -29,6 +29,7 @@ class UsersFixture extends TestFixture
                 'user_pass' => '$2y$10$DrB7rgOd2Iw/97bjgjwb5uBFUD48L.uZPkAypF0H7pCPgedkeBhP.',
                 'google_id' => null,
                 'session_token' => null,
+                'email_verified_at' => '2026-10-01 00:00:00',
             ],
         ];
         parent::init();

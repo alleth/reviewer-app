@@ -81,22 +81,7 @@ parameters:
 			path: src/Controller/PaymentsController.php
 
 		-
-			message: "#^Access to an undefined property App\\\\Controller\\\\UsersController\\:\\:\\$Users\\.$#"
-			count: 23
-			path: src/Controller/UsersController.php
-
-		-
 			message: "#^Call to an undefined method Cake\\\\ORM\\\\Table\\:\\:activeForUser\\(\\)\\.$#"
-			count: 1
-			path: src/Controller/UsersController.php
-
-		-
-			message: "#^Method App\\\\Controller\\\\UsersController\\:\\:login\\(\\) has no return type specified\\.$#"
-			count: 1
-			path: src/Controller/UsersController.php
-
-		-
-			message: "#^Method App\\\\Controller\\\\UsersController\\:\\:register\\(\\) has no return type specified\\.$#"
 			count: 1
 			path: src/Controller/UsersController.php
 

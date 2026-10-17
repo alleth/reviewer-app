@@ -21,9 +21,51 @@ function LoginPage({ mode = 'login', onClose }) {
     // Set when login() reports the matched account has no password yet (Google-only
     // account) — swaps the form for a personalized "continue with Google" prompt.
     const [pendingAccount, setPendingAccount] = useState(null);
+    // Set when register() or login() says the account's email isn't verified yet —
+    // swaps the form for the "enter the code we emailed you" step. No session
+    // exists until /api/verify-email accepts the code.
+    const [verifyEmail, setVerifyEmail] = useState(null);
+    const [verifyCode, setVerifyCode] = useState('');
+    const [notice, setNotice] = useState('');
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
+    };
+
+    const startVerification = (data) => {
+        setVerifyEmail(data.email);
+        setVerifyCode('');
+        setError('');
+        setNotice(data.message || 'Enter the 6-digit code we emailed you.');
+    };
+
+    const handleVerify = async (e) => {
+        e.preventDefault();
+        try {
+            const res = await api.post('/api/verify-email', { email: verifyEmail, code: verifyCode });
+
+            if (res.data.success) {
+                localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));
+                window.location.href = '/';
+            } else {
+                setNotice('');
+                setError(res.data.message || 'That code is wrong or has expired.');
+            }
+        } catch (err) {
+            setNotice('');
+            setError(err.response?.data?.message || 'Verification failed. Please try again.');
+        }
+    };
+
+    const handleResend = async () => {
+        try {
+            const res = await api.post('/api/verify-email/resend', { email: verifyEmail });
+            setError('');
+            setNotice(res.data.message || 'A new code is on its way.');
+        } catch (err) {
+            setNotice('');
+            setError('Could not send a new code. Please try again.');
+        }
     };
 
     const handleLogin = async (e) => {
@@ -41,6 +83,8 @@ function LoginPage({ mode = 'login', onClose }) {
             } else if (res.data.needsGoogleSetup) {
                 setPendingAccount(res.data.account);
                 setError('');
+            } else if (res.data.needsVerification) {
+                startVerification(res.data);
             } else if (res.data.needsCode) {
                 setLoginChallenge(true);
                 setError(res.data.message || 'Enter the code we emailed you.');
@@ -77,6 +121,8 @@ function LoginPage({ mode = 'login', onClose }) {
             if (res.data.success) {
                 localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));
                 window.location.href = '/';
+            } else if (res.data.needsVerification) {
+                startVerification(res.data);
             } else {
                 const errors = res.data.errors || {};
                 if (errors.email) {
@@ -107,7 +153,7 @@ function LoginPage({ mode = 'login', onClose }) {
                 setError(res.data.message || 'Google sign-in failed');
             }
         } catch (err) {
-            setError('Google sign-in failed. Please try again.');
+            setError(err.response?.data?.message || 'Google sign-in failed. Please try again.');
         }
     };
 
@@ -130,7 +176,7 @@ function LoginPage({ mode = 'login', onClose }) {
                 setError(res.data.message || 'Google sign-in failed');
             }
         } catch (err) {
-            setError('Google sign-in failed. Please try again.');
+            setError(err.response?.data?.message || 'Google sign-in failed. Please try again.');
         }
     };
 
@@ -140,6 +186,66 @@ function LoginPage({ mode = 'login', onClose }) {
                 initialEmail={formData.username.includes('@') ? formData.username : ''}
                 onBackToLogin={() => setRecovering(false)}
             />
+        );
+    }
+
+    if (verifyEmail) {
+        return (
+            <div className="p-2">
+                <h4 className="mb-2 text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+                    Check your email
+                </h4>
+                <p className="mb-4 text-center text-sm text-gray-500 dark:text-gray-400">{verifyEmail}</p>
+
+                {notice && (
+                    <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
+                        {notice}
+                    </div>
+                )}
+
+                {error && (
+                    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+                        {error}
+                    </div>
+                )}
+
+                <form onSubmit={handleVerify} className="space-y-4">
+                    <div>
+                        <label className="form-label">6-digit code</label>
+                        <input
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            maxLength={6}
+                            value={verifyCode}
+                            onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ''))}
+                            required
+                            className="form-input tracking-[0.4em]"
+                            autoFocus
+                        />
+                    </div>
+
+                    <button type="submit" className="btn-primary w-full py-2.5 text-base">
+                        Verify &amp; continue
+                    </button>
+                </form>
+
+                <button
+                    type="button"
+                    className="btn-link mt-4 w-full text-center"
+                    onClick={handleResend}
+                >
+                    Send a new code
+                </button>
+
+                <button
+                    type="button"
+                    className="btn-link mt-2 w-full text-center text-gray-500 dark:text-gray-400"
+                    onClick={() => { setVerifyEmail(null); setNotice(''); setError(''); }}
+                >
+                    Use a different account
+                </button>
+            </div>
         );
     }
 

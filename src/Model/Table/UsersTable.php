@@ -85,6 +85,11 @@ class UsersTable extends Table
             ->maxLength('user_pass', 255)
             ->allowEmptyString('user_pass');
 
+        // Set only by UsersController (it isn't mass-assignable); NULL = unverified.
+        $validator
+            ->dateTime('email_verified_at')
+            ->allowEmptyDateTime('email_verified_at');
+
         return $validator;
     }
 

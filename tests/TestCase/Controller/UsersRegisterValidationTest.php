@@ -58,9 +58,11 @@ class UsersRegisterValidationTest extends TestCase
         $email = 'firstname.middlename.lastname.2026@example.com';
         $this->post('/api/register', $this->payload(['email' => $email]));
 
+        // Registered, and waiting for the emailed code (B3-V) — not a validation error.
         $this->assertResponseOk();
-        $this->assertTrue($this->body()['success'] ?? null);
-        $this->assertSame($email, $this->body()['user']['email'] ?? null);
+        $this->assertTrue($this->body()['needsVerification'] ?? null);
+        $this->assertSame($email, $this->body()['email'] ?? null);
+        $this->assertArrayNotHasKey('errors', $this->body());
     }
 
     public function testRegisterRejectsMissingEmailWithReadableError(): void
