@@ -1,14 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { FaArrowLeft, FaArrowRight, FaCircleCheck, FaCircleXmark, FaRotateRight } from 'react-icons/fa6';
-import { fetchTopics, fetchPractice } from '../api';
+import { fetchTopics, fetchPractice, submitAnswer } from '../api';
 import { isNoActivePass } from '../sessionErrors';
 import { getPurchases } from '../reviewers';
 
 const REVIEWER = 'civil-service';
 const COUNTS = [10, 20, 30];
-
-const correctId = (q) => q?.choices?.find((c) => c.is_correct)?.choice_id ?? null;
 
 export default function Practice({ user }) {
     const ownsLocally = getPurchases(user).some((p) => p.reviewer === REVIEWER);
@@ -27,7 +25,12 @@ export default function Practice({ user }) {
     const [questions, setQuestions] = useState([]);
     const [idx, setIdx] = useState(0);
     const [answers, setAnswers] = useState([]); // choiceId | null, per question
-    const [revealed, setRevealed] = useState(false);
+    // The server's verdict per question (H2): { correct, correct_choice_id, explanation }
+    // or null until answered. Practice sets carry no answer key, so the reveal, the
+    // score and the final review all come from these.
+    const [results, setResults] = useState([]);
+    const [checking, setChecking] = useState(false);
+    const [checkErr, setCheckErr] = useState('');
     const [errMsg, setErrMsg] = useState('');
 
     useEffect(() => {
@@ -57,8 +60,9 @@ export default function Practice({ user }) {
             }
             setQuestions(qs);
             setAnswers(new Array(qs.length).fill(null));
+            setResults(new Array(qs.length).fill(null));
+            setCheckErr('');
             setIdx(0);
-            setRevealed(false);
             setPhase('quiz');
         } catch (e) {
             if (isNoActivePass(e)) {
@@ -71,10 +75,26 @@ export default function Practice({ user }) {
         }
     };
 
-    const score = useMemo(
-        () => answers.reduce((s, a, i) => s + (a !== null && a === correctId(questions[i]) ? 1 : 0), 0),
-        [answers, questions],
-    );
+    const score = useMemo(() => results.filter((r) => r?.correct).length, [results]);
+
+    const checkAnswer = async () => {
+        const question = questions[idx];
+        const choiceId = answers[idx];
+        setChecking(true);
+        setCheckErr('');
+        try {
+            const result = await submitAnswer(question.question_id, choiceId);
+            setResults((rs) => { const n = [...rs]; n[idx] = result; return n; });
+        } catch (e) {
+            if (isNoActivePass(e)) {
+                setPassMissing(true);
+            } else {
+                setCheckErr("Couldn't check your answer. Please try again.");
+            }
+        } finally {
+            setChecking(false);
+        }
+    };
 
     // --- gate: practice is paid content ---
     if (!owns) {
@@ -177,7 +197,8 @@ export default function Practice({ user }) {
                 {/* answer review */}
                 <div className="mt-6 space-y-3">
                     {questions.map((q, i) => {
-                        const right = correctId(q);
+                        const result = results[i];
+                        const right = result?.correct_choice_id ?? null;
                         const mine = answers[i];
                         return (
                             <div key={q.question_id} className="card p-4">
@@ -205,9 +226,9 @@ export default function Practice({ user }) {
                                         );
                                     })}
                                 </ul>
-                                {q.explanation && (
+                                {result?.explanation && (
                                     <p className="mt-2 border-t border-gray-100 pt-2 text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
-                                        {q.explanation}
+                                        {result.explanation}
                                     </p>
                                 )}
                             </div>
@@ -221,7 +242,9 @@ export default function Practice({ user }) {
     // --- quiz ---
     const q = questions[idx];
     const chosen = answers[idx];
-    const right = correctId(q);
+    const result = results[idx];
+    const revealed = result != null;
+    const right = result?.correct_choice_id ?? null;
 
     return (
         <section className="mx-auto max-w-md">
@@ -260,7 +283,7 @@ export default function Practice({ user }) {
                             <button
                                 key={c.choice_id}
                                 type="button"
-                                disabled={revealed}
+                                disabled={revealed || checking}
                                 onClick={() => setAnswers((a) => { const n = [...a]; n[idx] = c.choice_id; return n; })}
                                 className={`flex w-full items-start gap-2 rounded-lg border px-3 py-2.5 text-left text-sm text-gray-800 transition-colors dark:text-gray-200 ${cls}`}
                             >
@@ -272,9 +295,15 @@ export default function Practice({ user }) {
                     })}
                 </div>
 
-                {revealed && q.explanation && (
+                {revealed && result.explanation && (
                     <p className="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                        {q.explanation}
+                        {result.explanation}
+                    </p>
+                )}
+
+                {checkErr && (
+                    <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                        {checkErr}
                     </p>
                 )}
 
@@ -282,17 +311,18 @@ export default function Practice({ user }) {
                     {!revealed ? (
                         <button
                             type="button"
-                            disabled={chosen === null}
-                            onClick={() => setRevealed(true)}
+                            disabled={chosen === null || checking}
+                            onClick={checkAnswer}
                             className="btn-primary w-full"
                         >
-                            Submit answer
+                            {checking ? 'Checking…' : 'Submit answer'}
                         </button>
                     ) : (
                         <button
                             type="button"
                             onClick={() => {
-                                if (idx + 1 < questions.length) { setIdx(idx + 1); setRevealed(false); }
+                                setCheckErr('');
+                                if (idx + 1 < questions.length) setIdx(idx + 1);
                                 else setPhase('done');
                             }}
                             className="btn-primary flex w-full items-center justify-center gap-2"
