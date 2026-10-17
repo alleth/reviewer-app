@@ -270,5 +270,49 @@ class UsersControllerTest extends TestCase
         $this->post('/api/account', ['fname' => 'Janet']);
 
         $this->assertResponseCode(401);
+        $this->assertSame('Not logged in', $this->responseJson()['message']);
+        $this->assertSame('signed_out', $this->responseJson()['reason']);
+    }
+
+    /**
+     * The shared session check (H1) reports why a 401 happened.
+     *
+     * @return void
+     * @uses \App\Controller\UsersController::updateAccount()
+     */
+    public function testUpdateAccountFromAReplacedSessionSaysSignedInElsewhere(): void
+    {
+        $this->loginAs(1);
+        $users = $this->getTableLocator()->get('Users');
+        $user = $users->get(1);
+        $user->session_token = 'token-from-another-device';
+        $users->saveOrFail($user);
+
+        $this->asAjax();
+        $this->post('/api/account', ['fname' => 'Janet']);
+
+        $this->assertResponseCode(401);
+        $this->assertSame('signed_in_elsewhere', $this->responseJson()['reason']);
+        $this->assertSame('Jane', $users->get(1)->fname);
+    }
+
+    /**
+     * B3-V backstop via the shared check: an unverified account's session is
+     * dropped, and session() says `signed_out` rather than "elsewhere".
+     *
+     * @return void
+     * @uses \App\Controller\UsersController::session()
+     */
+    public function testSessionForAnUnverifiedAccountEndsAsSignedOut(): void
+    {
+        $this->loginAs(1);
+        $this->getTableLocator()->get('Users')->updateAll(['email_verified_at' => null], ['user_id' => 1]);
+
+        $this->get('/api/session');
+
+        $body = $this->responseJson();
+        $this->assertFalse($body['loggedIn']);
+        $this->assertSame('signed_out', $body['reason']);
+        $this->assertSessionNotHasKey('Auth.User');
     }
 }

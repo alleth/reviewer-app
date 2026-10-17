@@ -14,7 +14,8 @@ use Throwable;
 
 /**
  * Access-pass checkout via Xendit. Manual auth (session `Auth.User` +
- * `session_token` guard), same as UsersController. See the CreatePasses
+ * `session_token` guard) through the shared SessionAuthTrait helpers on
+ * AppController, same as UsersController. See the CreatePasses
  * migration and CLAUDE.md → Deployment for the Xendit env vars and webhook URL.
  */
 class PaymentsController extends AppController
@@ -39,7 +40,7 @@ class PaymentsController extends AppController
 
         $userId = $this->activeUserId();
         if (!$userId) {
-            return $this->json(['success' => false, 'message' => 'Not logged in'], 401);
+            return $this->notLoggedIn();
         }
 
         try {
@@ -212,7 +213,7 @@ class PaymentsController extends AppController
     {
         $userId = $this->activeUserId();
         if (!$userId) {
-            return $this->json(['success' => false, 'message' => 'Not logged in'], 401);
+            return $this->notLoggedIn();
         }
 
         return $this->json([
@@ -229,77 +230,12 @@ class PaymentsController extends AppController
     {
         $userId = $this->activeUserId();
         if (!$userId) {
-            return $this->json(['success' => false, 'message' => 'Not logged in'], 401);
+            return $this->notLoggedIn();
         }
 
         return $this->json([
             'success' => true,
             'purchases' => $this->fetchTable('Passes')->historyForUser($userId),
         ])->withHeader('Cache-Control', 'no-store');
-    }
-
-    /**
-     * @param array<string, mixed> $body
-     */
-    private function json(array $body, int $status = 200): Response
-    {
-        return $this->response
-            ->withStatus($status)
-            ->withType('application/json')
-            ->withStringBody(json_encode($body));
-    }
-
-    /**
-     * Lightweight CSRF gate — see UsersController::requireAjaxHeader() for the
-     * full reasoning (no CSRF middleware; SameSite=None cookies; the header
-     * requirement reuses the CORS policy as the check).
-     *
-     * @return \Cake\Http\Response|null A 403 response if the header is missing, null to continue.
-     */
-    private function requireAjaxHeader(): ?Response
-    {
-        if ($this->request->getHeaderLine('X-Requested-With') !== 'XMLHttpRequest') {
-            return $this->response
-                ->withStatus(403)
-                ->withType('application/json')
-                ->withStringBody(json_encode(['success' => false, 'message' => 'Missing required request header']));
-        }
-
-        return null;
-    }
-
-    /**
-     * The logged-in user's id, or null when there's no session — or when this
-     * session has been superseded by a login on another device (mirrors
-     * UsersController::activeUserId()).
-     */
-    private function activeUserId(): ?int
-    {
-        $session = $this->request->getSession();
-        $user = $session->read('Auth.User');
-        if (!$user) {
-            return null;
-        }
-
-        $sessionToken = $session->read('Auth.token');
-        $current = $this->fetchTable('Users')->find()
-            ->select(['user_id', 'session_token'])
-            ->where(['user_id' => $user->user_id])
-            ->first();
-        $dbToken = $current?->session_token;
-
-        if ($sessionToken === null && $dbToken === null) {
-            return (int)$user->user_id;
-        }
-
-        if (!$current || $sessionToken === null || $sessionToken !== $dbToken) {
-            $session->delete('Auth.User');
-            $session->delete('Auth.token');
-            $session->renew();
-
-            return null;
-        }
-
-        return (int)$user->user_id;
     }
 }

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { FaArrowLeft, FaArrowRight, FaCircleCheck, FaCircleXmark, FaRotateRight } from 'react-icons/fa6';
 import { fetchTopics, fetchPractice } from '../api';
+import { isNoActivePass } from '../sessionErrors';
 import { getPurchases } from '../reviewers';
 
 const REVIEWER = 'civil-service';
@@ -10,7 +11,11 @@ const COUNTS = [10, 20, 30];
 const correctId = (q) => q?.choices?.find((c) => c.is_correct)?.choice_id ?? null;
 
 export default function Practice({ user }) {
-    const owns = getPurchases(user).some((p) => p.reviewer === REVIEWER);
+    const ownsLocally = getPurchases(user).some((p) => p.reviewer === REVIEWER);
+    // The server is the authority: a 403 no_active_pass (e.g. the pass lapsed
+    // since the stored user was last refreshed) shows the pass card too.
+    const [passMissing, setPassMissing] = useState(false);
+    const owns = ownsLocally && !passMissing;
     const [params] = useSearchParams();
     const presetTopic = params.get('topic');
 
@@ -34,7 +39,10 @@ export default function Practice({ user }) {
                     if (m) setTopicId(String(m.topic_id));
                 }
             })
-            .catch(() => { /* picker just falls back to "All topics" */ });
+            .catch((e) => {
+                if (isNoActivePass(e)) setPassMissing(true);
+                // otherwise the picker just falls back to "All topics"
+            });
     }, [presetTopic]);
 
     const start = async () => {
@@ -53,6 +61,11 @@ export default function Practice({ user }) {
             setRevealed(false);
             setPhase('quiz');
         } catch (e) {
+            if (isNoActivePass(e)) {
+                setPassMissing(true);
+                setPhase('setup');
+                return;
+            }
             setErrMsg('Could not load questions. Please try again.');
             setPhase('error');
         }

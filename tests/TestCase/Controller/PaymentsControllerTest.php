@@ -106,6 +106,31 @@ class PaymentsControllerTest extends TestCase
         $this->post('/api/checkout', ['reviewer' => 'civil-service', 'plan_id' => '7-day']);
 
         $this->assertResponseCode(401);
+        $this->assertSame('Not logged in', $this->responseJson()['message']);
+        $this->assertSame('signed_out', $this->responseJson()['reason']);
+    }
+
+    /**
+     * The shared session check (H1): a session replaced on another device gets
+     * a 401 saying so, and no pass is created.
+     *
+     * @return void
+     * @uses \App\Controller\PaymentsController::checkout()
+     */
+    public function testCheckoutFromAReplacedSessionSaysSignedInElsewhere(): void
+    {
+        $this->loginAs(1);
+        $users = $this->getTableLocator()->get('Users');
+        $user = $users->get(1);
+        $user->session_token = 'token-from-another-device';
+        $users->saveOrFail($user);
+
+        $this->asAjax();
+        $this->post('/api/checkout', ['reviewer' => 'civil-service', 'plan_id' => '7-day']);
+
+        $this->assertResponseCode(401);
+        $this->assertSame('signed_in_elsewhere', $this->responseJson()['reason']);
+        $this->assertSame(0, $this->getTableLocator()->get('Passes')->find()->count());
     }
 
     /**

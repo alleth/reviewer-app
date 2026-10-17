@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { FaArrowLeft, FaArrowRight, FaBookOpen } from 'react-icons/fa6';
 import { fetchTopic } from '../api';
+import { isNoActivePass } from '../sessionErrors';
 import { REVIEWERS, getPurchases } from '../reviewers';
 
 /**
@@ -12,7 +13,10 @@ import { REVIEWERS, getPurchases } from '../reviewers';
 export default function TopicReview({ user }) {
     const { reviewer: reviewerId, topicId } = useParams();
     const reviewer = REVIEWERS[reviewerId];
-    const owns = getPurchases(user).some((p) => p.reviewer === reviewerId);
+    const ownsLocally = getPurchases(user).some((p) => p.reviewer === reviewerId);
+    // A 403 no_active_pass from the server shows the pass card too (H1).
+    const [passMissing, setPassMissing] = useState(false);
+    const owns = ownsLocally && !passMissing;
 
     const [phase, setPhase] = useState('loading'); // loading | ready | error
     const [topic, setTopic] = useState(null);
@@ -25,7 +29,13 @@ export default function TopicReview({ user }) {
                 setTopic(t);
                 setPhase('ready');
             })
-            .catch(() => setPhase('error'));
+            .catch((e) => {
+                if (isNoActivePass(e)) {
+                    setPassMissing(true);
+                } else {
+                    setPhase('error');
+                }
+            });
     }, [topicId, owns]);
 
     if (!reviewer) {

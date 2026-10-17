@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { FaArrowRight, FaArrowLeft, FaBookOpen, FaClipboardCheck } from 'react-icons/fa6';
 import { fetchTopics } from '../api';
+import { isNoActivePass } from '../sessionErrors';
 import { REVIEWERS, getPurchases } from '../reviewers';
 
 /**
@@ -14,7 +15,10 @@ import { REVIEWERS, getPurchases } from '../reviewers';
 export default function Review({ user }) {
     const { reviewer: reviewerId } = useParams();
     const reviewer = REVIEWERS[reviewerId];
-    const owns = getPurchases(user).some((p) => p.reviewer === reviewerId);
+    const ownsLocally = getPurchases(user).some((p) => p.reviewer === reviewerId);
+    // A 403 no_active_pass from the server shows the no-pass banner too (H1).
+    const [passMissing, setPassMissing] = useState(false);
+    const owns = ownsLocally && !passMissing;
 
     // Topic cards need real topic_ids (to link into /topics/:topicId), so
     // fetch them instead of using reviewer.topics (display names only). `null`
@@ -25,8 +29,16 @@ export default function Review({ user }) {
     const [topics, setTopics] = useState(() => (owns ? null : (reviewer?.topics || []).map((name) => ({ name }))));
     useEffect(() => {
         if (!owns) return;
-        fetchTopics().catch(() => []).then(setTopics);
-    }, [owns]);
+        fetchTopics()
+            .catch((e) => {
+                if (isNoActivePass(e)) {
+                    setPassMissing(true);
+                    return (reviewer?.topics || []).map((name) => ({ name }));
+                }
+                return [];
+            })
+            .then(setTopics);
+    }, [owns, reviewer]);
 
     if (!reviewer) {
         return (
