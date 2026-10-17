@@ -609,17 +609,20 @@ class UsersVerificationTest extends TestCase
         $this->assertSame(1, $events->find()->where(['device_hash' => 'squatter-device'])->count());
     }
 
-    public function testGoogleLinksAVerifiedAccountAsBefore(): void
+    public function testGoogleDoesNotLinkAVerifiedAccountWithoutACode(): void
     {
         // jane@example.com (fixture user 1) is verified and has a password.
+        // Before B3-L this linked and signed in straight away; now it asks for
+        // an emailed code first (the flow itself is in UsersGoogleLinkTest).
         $this->fakeGoogle($this->googleClaims('jane@example.com'));
 
         $this->ajaxPost('/api/google-login', ['credential' => 'token']);
 
         $this->assertResponseOk();
-        $this->assertFalse($this->responseJson()['isNewUser']);
+        $this->assertTrue($this->responseJson()['needsLinkCode']);
+        $this->assertSessionNotHasKey('Auth.User');
         $user = $this->user(1);
-        $this->assertSame('google-sub-123', $user->google_id);
+        $this->assertNull($user->google_id);
         $this->assertTrue(password_verify(self::PASSWORD, (string)$user->user_pass));
         $this->assertSame('Jane', $user->fname);
     }
