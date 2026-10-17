@@ -7,13 +7,16 @@ use App\Auth\GoogleTokenVerifierInterface;
 use App\Auth\InvalidGoogleCredentialException;
 use App\Mailer\Transport\BrevoTransport;
 use App\Model\Entity\User;
+use App\Model\Table\UsersTable;
 use Cake\Http\Response;
 use Cake\I18n\DateTime;
 use Cake\Log\Log;
 use Cake\Mailer\Message;
 use Cake\Mailer\Transport\SmtpTransport;
 use Cake\Mailer\TransportFactory;
+use Cake\Validation\Validation;
 use LogicException;
+use PDOException;
 use Throwable;
 
 /**
@@ -49,6 +52,15 @@ class UsersController extends AppController
      */
     private const PURPOSE_VERIFY_EMAIL = 'verify_email';
     private const PURPOSE_LINK_GOOGLE = 'link_google';
+
+    /**
+     * Changing the account's email (H3): a code to the new address and, for an
+     * account without a password, a re-authentication code to the current one
+     * first. Both are bound to the new address (see issueCode()).
+     */
+    private const PURPOSE_CHANGE_EMAIL = 'change_email';
+    private const PURPOSE_EMAIL_CHANGE_REAUTH = 'email_change_reauth';
+
     private const CODE_RESEND_COOLDOWN_SECONDS = 60;
     private const CODE_MAX_SENDS_PER_DAY = 10;
 
@@ -234,8 +246,12 @@ class UsersController extends AppController
     /**
      * Generates a fresh 6-digit code for ($userId, $purpose), replacing any
      * earlier one, and returns the plaintext to email.
+     *
+     * A non-empty `$binding` (the normalized new address, for an email change)
+     * is hashed in with the code, so the code only verifies together with that
+     * same value: consumeCode() must be given it again.
      */
-    private function issueCode(int $userId, string $purpose): string
+    private function issueCode(int $userId, string $purpose, string $binding = ''): string
     {
         $codes = $this->fetchTable('AuthCodes');
         $codes->deleteAll(['user_id' => $userId, 'purpose' => $purpose]);
@@ -244,7 +260,7 @@ class UsersController extends AppController
         $codes->save($codes->newEntity([
             'user_id' => $userId,
             'purpose' => $purpose,
-            'code_hash' => password_hash($code, PASSWORD_DEFAULT),
+            'code_hash' => password_hash($this->codeSecret($code, $binding), PASSWORD_DEFAULT),
             'expires' => (new DateTime())->modify('+' . self::CODE_TTL_MINUTES . ' minutes'),
             'attempts' => 0,
             'created' => new DateTime(),
@@ -254,11 +270,29 @@ class UsersController extends AppController
     }
 
     /**
-     * Checks a submitted code for ($userId, $purpose). Consumes (deletes) the
-     * row on success; counts the attempt and deletes once exhausted on failure.
+     * What gets hashed for a code: the code alone, or the code plus a SHA-256 of
+     * its binding. bcrypt reads only the first 72 bytes, so the binding is
+     * digested (6 + 1 + 64 = 71 bytes) rather than appended as is; otherwise
+     * the end of a long email address would be silently ignored.
      */
-    private function consumeCode(int $userId, string $purpose, string $code): bool
+    private function codeSecret(string $code, string $binding): string
     {
+        return $binding === '' ? $code : $code . '|' . hash('sha256', $binding);
+    }
+
+    /**
+     * Checks a submitted code for ($userId, $purpose), with the same `$binding`
+     * it was issued with. Consumes (deletes) the row on success unless
+     * `$consume` is false; counts the attempt and deletes once exhausted on
+     * failure.
+     */
+    private function consumeCode(
+        int $userId,
+        string $purpose,
+        string $code,
+        string $binding = '',
+        bool $consume = true,
+    ): bool {
         $codes = $this->fetchTable('AuthCodes');
         $row = $codes->find()
             ->where(['user_id' => $userId, 'purpose' => $purpose])
@@ -275,7 +309,7 @@ class UsersController extends AppController
             return false;
         }
 
-        if (!password_verify($code, $row->code_hash)) {
+        if (!password_verify($this->codeSecret($code, $binding), $row->code_hash)) {
             $row->attempts += 1;
             if ($row->attempts >= self::CODE_MAX_ATTEMPTS) {
                 $codes->delete($row);
@@ -286,7 +320,9 @@ class UsersController extends AppController
             return false;
         }
 
-        $codes->delete($row);
+        if ($consume) {
+            $codes->delete($row);
+        }
 
         return true;
     }
@@ -299,9 +335,18 @@ class UsersController extends AppController
      * can make the inbox receive). Every send leaves a code-less
      * `<purpose>_sent` row, so both limits survive issueCode() replacing the
      * code. Callers answer the same way whether or not a code went out.
+     *
+     * The code goes to `$to` when given (an email change sends to the new
+     * address), else to the account's own address. `$binding` is passed on to
+     * issueCode().
      */
-    private function sendLimitedCode(User $user, string $purpose, string $intro): bool
-    {
+    private function sendLimitedCode(
+        User $user,
+        string $purpose,
+        string $intro,
+        ?string $to = null,
+        string $binding = '',
+    ): bool {
         $userId = (int)$user->user_id;
         $sentPurpose = $purpose . '_sent';
         $codes = $this->fetchTable('AuthCodes');
@@ -331,7 +376,7 @@ class UsersController extends AppController
             'attempts' => 0,
             'created' => $now,
         ]));
-        $this->sendAuthCode((string)$user->email, $this->issueCode($userId, $purpose), $intro);
+        $this->sendAuthCode($to ?? (string)$user->email, $this->issueCode($userId, $purpose, $binding), $intro);
 
         return true;
     }
@@ -511,10 +556,11 @@ class UsersController extends AppController
                 return $throttled;
             }
 
-            // The frontend advertises "Username or Email" on this field, so match either.
+            // The frontend advertises "Username or Email" on this field, so match
+            // either. The email match ignores letter case (H3).
             $user = $this->Users->find()
-                ->where(['OR' => ['user_name' => $username, 'email' => $username]])
-                ->first();
+                ->where(['user_name' => (string)$username])
+                ->first() ?? $this->Users->findByEmailAddress((string)$username);
 
             if ($user && $user->user_pass !== null && password_verify($password, $user->user_pass)) {
                 // Correct password — clear the guess counter for this identifier.
@@ -642,7 +688,7 @@ class UsersController extends AppController
             $isNewUser = false;
 
             if (!$user) {
-                $user = $this->Users->find()->where(['email' => $email])->first();
+                $user = $this->Users->findByEmailAddress($email);
                 if ($user && !$user->isEmailVerified()) {
                     // Registered with this address but never verified: Google
                     // proves who owns it, so the account goes to them (B3-V (d)).
@@ -806,9 +852,11 @@ class UsersController extends AppController
     }
 
     /**
-     * Updates the logged-in user's profile fields (name, username, email) from
-     * the Settings page. Does not touch the password — that's setupAccount() for
-     * first-time setup, and a dedicated change-password flow later.
+     * Updates the logged-in user's profile fields (name, username) from the
+     * Settings page. Never the password (setupAccount() / changePassword()) and
+     * never the email: a changed `email` gets a 422 pointing at changeEmail(),
+     * which re-authenticates and verifies the new address (H3). Sending the
+     * current email back unchanged is fine.
      */
     public function updateAccount(): Response
     {
@@ -828,30 +876,257 @@ class UsersController extends AppController
             $user = $this->Users->get($userId);
 
             $data = $this->request->getData();
+            if (
+                array_key_exists('email', $data)
+                && UsersTable::normalizeEmail($this->textField($data, 'email'))
+                    !== UsersTable::normalizeEmail((string)$user->email)
+            ) {
+                return $this->json([
+                    'success' => false,
+                    'message' => "Use 'Change email' in Settings to update your email address.",
+                ], 422);
+            }
+
             $patch = [];
-            foreach (['fname', 'lname', 'user_name', 'email'] as $field) {
+            foreach (['fname', 'lname', 'user_name'] as $field) {
                 if (array_key_exists($field, $data)) {
-                    $patch[$field] = trim((string)$data[$field]);
+                    $patch[$field] = trim($this->textField($data, $field));
                 }
             }
 
             $user = $this->Users->patchEntity($user, $patch);
 
             if (!$this->Users->save($user)) {
-                return $this->response
-                    ->withStatus(422)
-                    ->withType('application/json')
-                    ->withStringBody(json_encode(['success' => false, 'errors' => $user->getErrors()]));
+                return $this->json(['success' => false, 'errors' => $user->getErrors()], 422);
             }
 
             $this->request->getSession()->write('Auth.User', $user);
 
-            return $this->response
-                ->withType('application/json')
-                ->withStringBody(json_encode(['success' => true, 'user' => $user]));
+            return $this->json(['success' => true, 'user' => $user]);
         } catch (Throwable $e) {
             return $this->serverError($e);
         }
+    }
+
+    /**
+     * Changes the signed-in account's email address (H3). Nothing is stored
+     * between steps: every request carries `new_email`, and each code works
+     * only for the address it was issued for (see issueCode()).
+     *
+     * 1. Re-authenticate and get a code at the new address (`needsCode`):
+     *    `{new_email, current_password}`; or, for an account without a
+     *    password, `{new_email}` (a code to the current address,
+     *    `needsCurrentCode`) and then `{new_email, current_code}`.
+     * 2. `{new_email, code}`: the new-address code. A `change_email` code is
+     *    only ever issued after re-authentication, so it proves both. The
+     *    address switches (and counts as verified), other devices are signed
+     *    out, outstanding codes are dropped, and both addresses are told.
+     */
+    public function changeEmail(): Response
+    {
+        $this->request->allowMethod(['post']);
+
+        $blocked = $this->requireAjaxHeader();
+        if ($blocked !== null) {
+            return $blocked;
+        }
+
+        $userId = $this->activeUserId();
+        if (!$userId) {
+            return $this->notLoggedIn();
+        }
+
+        try {
+            $user = $this->Users->get($userId);
+            $data = $this->request->getData();
+            $newEmail = trim($this->textField($data, 'new_email'));
+
+            $invalid = $this->newEmailError($user, $newEmail);
+            if ($invalid !== null) {
+                return $this->json(['success' => false, 'message' => $invalid], 422);
+            }
+            $binding = UsersTable::normalizeEmail($newEmail);
+
+            $code = trim($this->textField($data, 'code'));
+            if ($code !== '') {
+                return $this->confirmEmailChange($user, $newEmail, $code);
+            }
+
+            if ($user->password_set) {
+                $password = $this->textField($data, 'current_password');
+                if ($password === '') {
+                    return $this->json(['success' => false, 'message' => 'Enter your current password.'], 422);
+                }
+                if (!password_verify($password, (string)$user->user_pass)) {
+                    return $this->json(['success' => false, 'message' => 'Your current password is incorrect.'], 400);
+                }
+            } else {
+                $currentCode = trim($this->textField($data, 'current_code'));
+                if ($currentCode === '') {
+                    $this->sendLimitedCode(
+                        $user,
+                        self::PURPOSE_EMAIL_CHANGE_REAUTH,
+                        'Someone (hopefully you) asked to change the email address on your CareerPass account to '
+                        . $this->maskEmail($newEmail) . ". Enter this code to confirm it's you.",
+                        null,
+                        $binding,
+                    );
+
+                    $current = $this->maskEmail((string)$user->email);
+
+                    return $this->json([
+                        'success' => false,
+                        'needsCurrentCode' => true,
+                        'email' => $current,
+                        'message' => "To confirm it's you, enter the 6-digit code we emailed to {$current}.",
+                    ]);
+                }
+                // Checked, not used up: the user may still need "Send a new
+                // code" for the new address, which repeats this request. It's
+                // deleted with every other code once the change goes through.
+                if (!$this->consumeCode($userId, self::PURPOSE_EMAIL_CHANGE_REAUTH, $currentCode, $binding, false)) {
+                    return $this->json(
+                        ['success' => false, 'message' => 'That code is wrong or has expired. Request a new one.'],
+                        400,
+                    );
+                }
+            }
+
+            $this->sendLimitedCode(
+                $user,
+                self::PURPOSE_CHANGE_EMAIL,
+                "Enter this code to confirm {$newEmail} as the email address for your CareerPass account.",
+                $newEmail,
+                $binding,
+            );
+
+            return $this->json([
+                'success' => false,
+                'needsCode' => true,
+                'email' => $newEmail,
+                'message' => "We emailed a 6-digit code to {$newEmail}. Enter it to confirm the change.",
+            ]);
+        } catch (Throwable $e) {
+            return $this->serverError($e);
+        }
+    }
+
+    /**
+     * The last step of changeEmail(): checks the new-address code, then switches
+     * the address in one transaction: marked verified, session_token rotated
+     * (other devices signed out; this one is kept), and every outstanding
+     * actionable code deleted, e.g. a password-reset code already sent to the
+     * old inbox. The `<purpose>_sent` rows (no code in them) stay, so the
+     * resend limits still hold. Then both addresses are told.
+     */
+    private function confirmEmailChange(User $user, string $newEmail, string $code): Response
+    {
+        $userId = (int)$user->user_id;
+        $binding = UsersTable::normalizeEmail($newEmail);
+
+        if (!$this->consumeCode($userId, self::PURPOSE_CHANGE_EMAIL, $code, $binding)) {
+            return $this->json(
+                ['success' => false, 'message' => 'That code is wrong or has expired. Request a new one.'],
+                400,
+            );
+        }
+
+        $oldEmail = (string)$user->email;
+        $token = bin2hex(random_bytes(20));
+        $user->email = $newEmail;
+        $user->email_verified_at = new DateTime();
+        $user->session_token = $token;
+
+        try {
+            $saved = $this->Users->getConnection()->transactional(function () use ($user, $userId): bool {
+                $this->fetchTable('AuthCodes')->deleteAll(['user_id' => $userId, 'code_hash !=' => '']);
+
+                return $this->Users->save($user, ['atomic' => false]) !== false;
+            });
+        } catch (PDOException $e) {
+            // The unique index caught an account that took the address between
+            // the checks and the save.
+            if ((string)$e->getCode() !== '23000') {
+                throw $e;
+            }
+            $saved = false;
+        }
+
+        if (!$saved) {
+            return $this->json(['success' => false, 'message' => 'This email is already registered.'], 422);
+        }
+
+        $session = $this->request->getSession();
+        $session->write('Auth.token', $token);
+        $session->write('Auth.User', $user);
+
+        $this->sendMail(
+            $oldEmail,
+            'Your CareerPass email address was changed',
+            'The email address on your CareerPass account was just changed to '
+            . $this->maskEmail($newEmail) . ", and other devices were signed out.\n\n"
+            . "If this wasn't you, contact support@career-pass.org.",
+        );
+        $this->sendMail(
+            $newEmail,
+            'Your CareerPass email address was updated',
+            'This is now the email address for your CareerPass account.',
+        );
+
+        return $this->json([
+            'success' => true,
+            'user' => $this->withPurchases($user),
+            'message' => 'Email changed. Other devices were signed out.',
+        ]);
+    }
+
+    /**
+     * Why $newEmail can't become $user's address, or null when it can. Letter
+     * case is ignored throughout (see UsersTable::normalizeEmail()).
+     */
+    private function newEmailError(User $user, string $newEmail): ?string
+    {
+        if ($newEmail === '' || !Validation::email($newEmail)) {
+            return 'Enter a valid email address.';
+        }
+        if (mb_strlen($newEmail) > 100) {
+            return 'Email must be 100 characters or fewer.';
+        }
+        if (UsersTable::normalizeEmail($newEmail) === UsersTable::normalizeEmail((string)$user->email)) {
+            return "That's already your email address.";
+        }
+        if ($this->Users->emailTaken($newEmail, (int)$user->user_id)) {
+            return 'This email is already registered.';
+        }
+
+        return null;
+    }
+
+    /**
+     * `allethrey@gmail.com` → `a***@gmail.com`: enough to recognize, not to
+     * read off a borrowed session or someone else's screen.
+     */
+    private function maskEmail(string $email): string
+    {
+        $at = strrpos($email, '@');
+        if ($at === false || $at === 0) {
+            return '***';
+        }
+
+        return mb_substr($email, 0, 1) . '***' . substr($email, $at);
+    }
+
+    /**
+     * A request field as a string; anything that isn't a scalar (an array, say)
+     * counts as empty rather than raising a conversion warning.
+     *
+     * @param array<mixed> $data Request data.
+     */
+    private function textField(array $data, string $key): string
+    {
+        $value = $data[$key] ?? '';
+
+        return is_scalar($value) ? (string)$value : '';
     }
 
     /**
@@ -1015,14 +1290,12 @@ class UsersController extends AppController
         }
 
         $email = trim((string)$this->request->getData('email'));
-        $user = $email !== ''
-            ? $this->Users->find()->where(['email' => $email])->first()
-            : null;
+        $user = $this->Users->findByEmailAddress($email);
 
         if ($user) {
             $code = $this->issueCode((int)$user->user_id, 'password_reset');
             $this->sendAuthCode(
-                $user->email,
+                (string)$user->email,
                 $code,
                 'We got a request to reset your CareerPass password.',
             );
@@ -1056,9 +1329,7 @@ class UsersController extends AppController
             return $this->json(['success' => false, 'message' => $passwordError], 422);
         }
 
-        $user = $email !== ''
-            ? $this->Users->find()->where(['email' => $email])->first()
-            : null;
+        $user = $this->Users->findByEmailAddress($email);
 
         if (!$user || !$this->consumeCode((int)$user->user_id, 'password_reset', $code)) {
             return $this->json(
@@ -1104,9 +1375,7 @@ class UsersController extends AppController
         $code = trim((string)$this->request->getData('code'));
 
         try {
-            $user = $email !== ''
-                ? $this->Users->find()->where(['email' => $email])->first()
-                : null;
+            $user = $this->Users->findByEmailAddress($email);
 
             if (
                 !$user
@@ -1148,9 +1417,7 @@ class UsersController extends AppController
         $email = trim((string)$this->request->getData('email'));
 
         try {
-            $user = $email !== ''
-                ? $this->Users->find()->where(['email' => $email])->first()
-                : null;
+            $user = $this->Users->findByEmailAddress($email);
 
             if ($user && !$user->isEmailVerified()) {
                 $this->sendLimitedCode(
