@@ -18,6 +18,17 @@ use Cake\ORM\Entity;
  */
 class Question extends Entity
 {
+    /**
+     * Never serialize the explanation (H2): it gives the answer away. It is
+     * returned only after answering, by Api\QuestionsController::answer().
+     *
+     * @var list<string>
+     */
+    protected array $_hidden = ['explanation'];
+
+    /**
+     * @var array<string, bool>
+     */
     protected array $_accessible = [
         'topic_id' => true,
         'question_text' => true,

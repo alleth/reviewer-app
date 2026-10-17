@@ -81,11 +81,26 @@ export function fetchTopic(topicId) {
     return api.get(`/api/topics/${topicId}`).then((res) => res.data?.data);
 }
 
-/** A randomized practice set. `topicId` optional; `limit` 1–50. */
+/**
+ * A randomized practice set. `topicId` optional; `limit` 1–50. The questions
+ * carry no answer key or explanations (H2) — check each answer with
+ * submitAnswer().
+ */
 export function fetchPractice({ topicId, limit = 20 } = {}) {
     const params = { limit };
     if (topicId) params.topic_id = topicId;
     return api.get('/api/questions/practice', { params }).then((res) => res.data?.data || []);
+}
+
+/**
+ * Checks one answer on the server (H2). Resolves to
+ * `{ correct, correct_choice_id, explanation }`. Only works for questions this
+ * session was served by fetchPractice().
+ */
+export function submitAnswer(questionId, choiceId) {
+    return api
+        .post(`/api/questions/${questionId}/answer`, { choice_id: choiceId })
+        .then((res) => res.data);
 }
 
 export default API_URL;
