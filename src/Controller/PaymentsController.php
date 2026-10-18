@@ -7,6 +7,7 @@ use App\Payment\Plans;
 use App\Payment\Xendit;
 use App\Payment\XenditException;
 use App\Service\PassService;
+use App\Service\RateLimiter;
 use Cake\Http\Response;
 use Cake\I18n\DateTime;
 use Cake\Log\Log;
@@ -22,6 +23,12 @@ class PaymentsController extends AppController
 {
     /** Reviewers a pass can be bought for (per-reviewer entitlements). */
     private const REVIEWERS = ['civil-service'];
+
+    /**
+     * New invoices per account per hour (H4). Reusing a recent pending invoice
+     * doesn't count.
+     */
+    private const NEW_INVOICES_PER_HOUR = 10;
 
     /**
      * POST /api/checkout — body { reviewer, plan_id }. Reuses a very-recent
@@ -80,6 +87,19 @@ class PaymentsController extends AppController
                 return $this->json(['success' => true, 'invoice_url' => $recent->invoice_url]);
             }
 
+            $limiter = new RateLimiter();
+            $limitKey = RateLimiter::key('u', (string)$userId);
+            $wait = $limiter->retryAfter('checkout_new', $limitKey, [[self::NEW_INVOICES_PER_HOUR, 3600]]);
+            if ($wait !== null) {
+                return $this->json([
+                    'success' => false,
+                    'reason' => 'rate_limited',
+                    'retryAfter' => $wait,
+                    'message' => 'Too many checkouts started. Please try again in '
+                        . (int)ceil($wait / 60) . ' minutes.',
+                ], 429)->withHeader('Retry-After', (string)$wait);
+            }
+
             $user = $this->fetchTable('Users')->get($userId);
 
             /** @var \App\Model\Entity\Pass $pass */
@@ -108,6 +128,7 @@ class PaymentsController extends AppController
                 'invoice_duration' => 86400,
             ], $pass->external_id);
 
+            $limiter->hit('checkout_new', $limitKey);
             $pass->xendit_invoice_id = (string)($invoice['id'] ?? '');
             $pass->invoice_url = (string)($invoice['invoice_url'] ?? '');
             if (!$passes->save($pass)) {

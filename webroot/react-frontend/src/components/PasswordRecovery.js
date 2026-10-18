@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { api } from '../api';
+import Turnstile from './Turnstile';
+import useRateLimit from './useRateLimit';
 
 /**
  * "Forgot password" flow: email → emailed 6-digit code + new password → done.
- * Rendered by LoginPage in place of the sign-in form.
+ * Rendered by LoginPage in place of the sign-in form. Requesting a code (and
+ * resending one) goes through Turnstile; any 429 shows a countdown (H4).
  */
 export default function PasswordRecovery({ initialEmail = '', onBackToLogin }) {
     const [step, setStep] = useState('email'); // 'email' | 'code' | 'done'
@@ -13,18 +16,28 @@ export default function PasswordRecovery({ initialEmail = '', onBackToLogin }) {
     const [confirm, setConfirm] = useState('');
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
+    const limit = useRateLimit();
+    // Single-use Turnstile token; the widget remounts after each request.
+    const [turnstileToken, setTurnstileToken] = useState('');
+    const [turnstileKey, setTurnstileKey] = useState(0);
+    const shownError = limit.message || error;
+    const disabled = busy || limit.active;
 
     const requestCode = async (e) => {
         e.preventDefault();
         setBusy(true);
         setError('');
         try {
-            await api.post('/api/password/forgot', { email });
+            await api.post('/api/password/forgot', { email, turnstile_token: turnstileToken });
             setStep('code');
         } catch (err) {
-            setError('Could not reach the server. Please try again.');
+            if (!limit.start(err)) {
+                setError(err.response?.data?.message || 'Could not reach the server. Please try again.');
+            }
         } finally {
             setBusy(false);
+            setTurnstileToken('');
+            setTurnstileKey((k) => k + 1);
         }
     };
 
@@ -48,7 +61,9 @@ export default function PasswordRecovery({ initialEmail = '', onBackToLogin }) {
                 setError(res.data.message || 'Could not reset your password.');
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Could not reset your password.');
+            if (!limit.start(err)) {
+                setError(err.response?.data?.message || 'Could not reset your password.');
+            }
         } finally {
             setBusy(false);
         }
@@ -65,9 +80,9 @@ export default function PasswordRecovery({ initialEmail = '', onBackToLogin }) {
                 {step === 'done' && 'All set.'}
             </p>
 
-            {error && (
+            {shownError && (
                 <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
-                    {error}
+                    {shownError}
                 </div>
             )}
 
@@ -83,7 +98,8 @@ export default function PasswordRecovery({ initialEmail = '', onBackToLogin }) {
                             className="form-input"
                         />
                     </div>
-                    <button type="submit" className="btn-primary w-full py-2.5 text-base" disabled={busy}>
+                    <Turnstile key={turnstileKey} onToken={setTurnstileToken} />
+                    <button type="submit" className="btn-primary w-full py-2.5 text-base" disabled={disabled}>
                         {busy ? 'Sending…' : 'Send code'}
                     </button>
                 </form>
@@ -123,14 +139,16 @@ export default function PasswordRecovery({ initialEmail = '', onBackToLogin }) {
                             className="form-input"
                         />
                     </div>
-                    <button type="submit" className="btn-primary w-full py-2.5 text-base" disabled={busy}>
+                    <button type="submit" className="btn-primary w-full py-2.5 text-base" disabled={disabled}>
                         {busy ? 'Saving…' : 'Reset password'}
                     </button>
+                    {/* A resend is a new forgot-password request, so it needs a fresh check too. */}
+                    <Turnstile key={turnstileKey} onToken={setTurnstileToken} />
                     <button
                         type="button"
                         className="btn-link w-full text-center text-gray-500 dark:text-gray-400"
                         onClick={requestCode}
-                        disabled={busy}
+                        disabled={disabled}
                     >
                         Resend code
                     </button>

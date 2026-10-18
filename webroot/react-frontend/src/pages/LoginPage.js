@@ -2,10 +2,18 @@ import React, { useState } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
 import InitialsAvatar from '../components/ui/InitialsAvatar';
 import PasswordRecovery from '../components/PasswordRecovery';
+import Turnstile from '../components/Turnstile';
+import useRateLimit from '../components/useRateLimit';
 import { api } from '../api';
 
 function LoginPage({ mode = 'login', onClose }) {
     const [recovering, setRecovering] = useState(false);
+    // H4: a 429 starts a countdown that replaces the error and disables submit.
+    const limit = useRateLimit();
+    // H4: sign-up's Turnstile token. Single-use, so the widget is remounted
+    // (new key) after every attempt.
+    const [turnstileToken, setTurnstileToken] = useState('');
+    const [turnstileKey, setTurnstileKey] = useState(0);
     // Set when login() asks for an emailed code (rapid device-switch guard).
     const [loginChallenge, setLoginChallenge] = useState(false);
     const [loginCode, setLoginCode] = useState('');
@@ -37,6 +45,15 @@ function LoginPage({ mode = 'login', onClose }) {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
+    // True (and the countdown shown instead of any message) when err is a 429.
+    const rateLimited = (err) => {
+        if (!limit.start(err)) return false;
+        setNotice('');
+        setError('');
+        return true;
+    };
+    const shownError = limit.message || error;
+
     const startVerification = (data) => {
         setVerifyEmail(data.email);
         setVerifyCode('');
@@ -57,6 +74,7 @@ function LoginPage({ mode = 'login', onClose }) {
                 setError(res.data.message || 'That code is wrong or has expired.');
             }
         } catch (err) {
+            if (rateLimited(err)) return;
             setNotice('');
             setError(err.response?.data?.message || 'Verification failed. Please try again.');
         }
@@ -68,6 +86,7 @@ function LoginPage({ mode = 'login', onClose }) {
             setError('');
             setNotice(res.data.message || 'A new code is on its way.');
         } catch (err) {
+            if (rateLimited(err)) return;
             setNotice('');
             setError('Could not send a new code. Please try again.');
         }
@@ -97,6 +116,7 @@ function LoginPage({ mode = 'login', onClose }) {
                 setError(res.data.message || 'Invalid credentials');
             }
         } catch (err) {
+            if (rateLimited(err)) return;
             setError(err.response?.data?.message || err.response?.data?.error || 'Login failed');
         }
     };
@@ -120,7 +140,8 @@ function LoginPage({ mode = 'login', onClose }) {
                 lname: formData.lname,
                 email: formData.email,
                 user_name: formData.username,
-                user_pass: formData.password
+                user_pass: formData.password,
+                turnstile_token: turnstileToken,
             });
 
             if (res.data.success) {
@@ -139,7 +160,13 @@ function LoginPage({ mode = 'login', onClose }) {
                 }
             }
         } catch (err) {
-            setError('Could not connect to server. Please try again.');
+            if (!rateLimited(err)) {
+                // e.g. the Turnstile check: the server says what went wrong.
+                setError(err.response?.data?.message || 'Could not connect to server. Please try again.');
+            }
+        } finally {
+            setTurnstileToken('');
+            setTurnstileKey((k) => k + 1);
         }
     };
 
@@ -166,6 +193,7 @@ function LoginPage({ mode = 'login', onClose }) {
             const res = await api.post('/api/google-login', { credential });
             handleGoogleResult(res.data, credential, next);
         } catch (err) {
+            if (rateLimited(err)) return;
             setError(err.response?.data?.message || 'Google sign-in failed. Please try again.');
         }
     };
@@ -194,6 +222,7 @@ function LoginPage({ mode = 'login', onClose }) {
                 setError(res.data.message || 'That code is wrong or has expired.');
             }
         } catch (err) {
+            if (rateLimited(err)) return;
             setNotice('');
             setError(err.response?.data?.message || 'Could not connect Google sign-in. Please try again.');
         }
@@ -205,6 +234,7 @@ function LoginPage({ mode = 'login', onClose }) {
             setError('');
             setNotice('If a new code was due, it\'s on its way. You can request a new code once a minute.');
         } catch (err) {
+            if (rateLimited(err)) return;
             setNotice('');
             setError(err.response?.data?.message || 'Could not send a new code. Please sign in with Google again.');
         }
@@ -233,9 +263,9 @@ function LoginPage({ mode = 'login', onClose }) {
                     </div>
                 )}
 
-                {error && (
+                {shownError && (
                     <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
-                        {error}
+                        {shownError}
                     </div>
                 )}
 
@@ -255,7 +285,7 @@ function LoginPage({ mode = 'login', onClose }) {
                         />
                     </div>
 
-                    <button type="submit" className="btn-primary w-full py-2.5 text-base">
+                    <button type="submit" className="btn-primary w-full py-2.5 text-base" disabled={limit.active}>
                         Verify &amp; connect Google
                     </button>
                 </form>
@@ -293,9 +323,9 @@ function LoginPage({ mode = 'login', onClose }) {
                     </div>
                 )}
 
-                {error && (
+                {shownError && (
                     <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
-                        {error}
+                        {shownError}
                     </div>
                 )}
 
@@ -315,7 +345,7 @@ function LoginPage({ mode = 'login', onClose }) {
                         />
                     </div>
 
-                    <button type="submit" className="btn-primary w-full py-2.5 text-base">
+                    <button type="submit" className="btn-primary w-full py-2.5 text-base" disabled={limit.active}>
                         Verify &amp; continue
                     </button>
                 </form>
@@ -358,9 +388,9 @@ function LoginPage({ mode = 'login', onClose }) {
                     For your security, this account needs a one-time setup. Continue with Google to finish it.
                 </div>
 
-                {error && (
+                {shownError && (
                     <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
-                        {error}
+                        {shownError}
                     </div>
                 )}
 
@@ -385,9 +415,9 @@ function LoginPage({ mode = 'login', onClose }) {
                 {mode === 'signup' ? 'Create an Account' : 'Welcome Back'}
             </h4>
 
-            {error && (
+            {shownError && (
                 <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
-                    {error}
+                    {shownError}
                 </div>
             )}
 
@@ -493,6 +523,8 @@ function LoginPage({ mode = 'login', onClose }) {
                     </div>
                 )}
 
+                {mode === 'signup' && <Turnstile key={turnstileKey} onToken={setTurnstileToken} />}
+
                 {mode === 'login' && (
                     <div className="text-right">
                         <button
@@ -505,7 +537,7 @@ function LoginPage({ mode = 'login', onClose }) {
                     </div>
                 )}
 
-                <button type="submit" className="btn-primary w-full py-2.5 text-base">
+                <button type="submit" className="btn-primary w-full py-2.5 text-base" disabled={limit.active}>
                     {mode === 'signup' ? 'Sign Up' : (loginChallenge ? 'Verify & sign in' : 'Login')}
                 </button>
             </form>
