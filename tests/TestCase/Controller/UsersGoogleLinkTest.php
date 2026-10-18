@@ -37,6 +37,7 @@ class UsersGoogleLinkTest extends TestCase
         'app.AuthCodes',
         'app.LoginEvents',
         'app.LoginAttempts',
+        'app.RateLimits',
         'app.Passes',
     ];
 

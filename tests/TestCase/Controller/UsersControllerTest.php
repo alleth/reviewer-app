@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Test\TestCase\Controller;
 
+use App\Service\RateLimiter;
 use App\Test\TestSuite\ApiTestTrait;
 use Cake\I18n\DateTime;
 use Cake\TestSuite\IntegrationTestTrait;
@@ -32,6 +33,7 @@ class UsersControllerTest extends TestCase
         'app.AuthCodes',
         'app.LoginEvents',
         'app.LoginAttempts',
+        'app.RateLimits',
         'app.Passes',
     ];
 
@@ -101,7 +103,7 @@ class UsersControllerTest extends TestCase
     public function testLoginWithWrongPasswordFailsAndIsCounted(): void
     {
         $this->asAjax();
-        $this->post('/api/login', ['user_name' => 'JaneDelaCruz', 'user_pass' => 'wrong-password']);
+        $this->post('/api/login', ['user_name' => 'janedelacruz', 'user_pass' => 'wrong-password']);
 
         $this->assertResponseOk();
         $body = $this->responseJson();
@@ -109,34 +111,30 @@ class UsersControllerTest extends TestCase
         $this->assertSame('Invalid username or password', $body['message']);
         $this->assertSessionNotHasKey('Auth.User');
 
-        // Counted against the lowercased identifier.
-        $attempts = $this->getTableLocator()->get('LoginAttempts')->find()
-            ->where(['identifier' => 'janedelacruz'])
-            ->count();
-        $this->assertSame(1, $attempts);
+        // Counted against the account (H4), not the typed name.
+        $this->assertSame(1, $this->loginFailures(RateLimiter::key('u', '1')));
     }
 
     /**
-     * After 10 failures in 15 minutes even the correct password is refused.
+     * After 20 failures in the last hour even the correct password waits
+     * (15 minutes after the last failure). Shorter waits and the step-up are
+     * covered by UsersRateLimitTest.
      *
      * @return void
      * @uses \App\Controller\UsersController::login()
      */
-    public function testLoginIsThrottledAfterTenRecentFailures(): void
+    public function testLoginWaitsAfterTwentyRecentFailures(): void
     {
-        $attempts = $this->getTableLocator()->get('LoginAttempts');
-        for ($i = 0; $i < 10; $i++) {
-            $attempts->saveOrFail($attempts->newEntity([
-                'identifier' => 'janedelacruz',
-                'created' => new DateTime('-1 minute'),
-            ]));
-        }
+        $this->addLoginFailures(RateLimiter::key('u', '1'), 20, '-1 minute');
 
         $this->asAjax();
         $this->post('/api/login', ['user_name' => 'janedelacruz', 'user_pass' => self::PASSWORD]);
 
         $this->assertResponseCode(429);
-        $this->assertFalse($this->responseJson()['success']);
+        $body = $this->responseJson();
+        $this->assertFalse($body['success']);
+        $this->assertSame('rate_limited', $body['reason']);
+        $this->assertGreaterThan(800, $body['retryAfter']);
         $this->assertSessionNotHasKey('Auth.User');
     }
 
@@ -146,17 +144,33 @@ class UsersControllerTest extends TestCase
      */
     public function testCorrectPasswordClearsEarlierFailures(): void
     {
-        $attempts = $this->getTableLocator()->get('LoginAttempts');
-        $attempts->saveOrFail($attempts->newEntity([
-            'identifier' => 'janedelacruz',
-            'created' => new DateTime('-1 minute'),
-        ]));
+        $key = RateLimiter::key('u', '1');
+        $this->addLoginFailures($key, 1, '-1 minute');
 
         $this->asAjax();
         $this->post('/api/login', ['user_name' => 'janedelacruz', 'user_pass' => self::PASSWORD]);
 
         $this->assertTrue($this->responseJson()['success']);
-        $this->assertSame(0, $attempts->find()->where(['identifier' => 'janedelacruz'])->count());
+        $this->assertSame(0, $this->loginFailures($key));
+    }
+
+    private function addLoginFailures(string $key, int $count, string $when): void
+    {
+        $events = $this->getTableLocator()->get('RateLimits');
+        for ($i = 0; $i < $count; $i++) {
+            $events->saveOrFail($events->newEntity([
+                'bucket' => 'login_fail',
+                'key_hash' => $key,
+                'created' => new DateTime($when),
+            ]));
+        }
+    }
+
+    private function loginFailures(string $key): int
+    {
+        return $this->getTableLocator()->get('RateLimits')->find()
+            ->where(['bucket' => 'login_fail', 'key_hash' => $key])
+            ->count();
     }
 
     /**

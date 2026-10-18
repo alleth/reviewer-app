@@ -9,6 +9,7 @@ import {
     FaLock,
 } from 'react-icons/fa6';
 import { api, changeEmail, fetchBillingHistory } from '../api';
+import useRateLimit from '../components/useRateLimit';
 import { getPurchases, daysLeft } from '../reviewers';
 
 const peso = (amount, currency = 'PHP') =>
@@ -99,8 +100,11 @@ function ChangePasswordForm() {
     const [cur, setCur] = useState('');
     const [next, setNext] = useState('');
     const [confirm, setConfirm] = useState('');
-    const [msg, setMsg] = useState(null); // { type, text }
+    const [message, setMsg] = useState(null); // { type, text }
     const [busy, setBusy] = useState(false);
+    // H4: a 429 shows a countdown and disables the button until it ends.
+    const limit = useRateLimit();
+    const msg = limit.active ? { type: 'err', text: limit.message } : message;
 
     const submit = async (e) => {
         e.preventDefault();
@@ -123,7 +127,9 @@ function ChangePasswordForm() {
                 setMsg({ type: 'err', text: res.data.message || 'Could not change password.' });
             }
         } catch (err) {
-            setMsg({ type: 'err', text: err.response?.data?.message || 'Could not reach the server.' });
+            if (!limit.start(err)) {
+                setMsg({ type: 'err', text: err.response?.data?.message || 'Could not reach the server.' });
+            }
         } finally {
             setBusy(false);
         }
@@ -159,7 +165,7 @@ function ChangePasswordForm() {
                         Changing your password signs you out on every other device.
                     </p>
                     <div className="flex gap-2">
-                        <button type="submit" className="btn-primary" disabled={busy}>
+                        <button type="submit" className="btn-primary" disabled={busy || limit.active}>
                             {busy ? 'Saving…' : 'Update password'}
                         </button>
                         <button type="button" className="btn-outline" onClick={() => { setOpen(false); setMsg(null); }}>
@@ -186,8 +192,12 @@ function ChangeEmailPanel({ passwordSet, onChanged }) {
     const [password, setPassword] = useState('');
     const [currentCode, setCurrentCode] = useState('');
     const [code, setCode] = useState('');
-    const [msg, setMsg] = useState(null); // { type, text }
+    const [message, setMsg] = useState(null); // { type, text }
     const [busy, setBusy] = useState(false);
+    // H4: a 429 shows a countdown and disables the buttons until it ends.
+    const limit = useRateLimit();
+    const msg = limit.active ? { type: 'err', text: limit.message } : message;
+    const disabled = busy || limit.active;
 
     const reset = () => {
         setStep('closed');
@@ -218,7 +228,9 @@ function ChangeEmailPanel({ passwordSet, onChanged }) {
                 setMsg({ type: 'err', text: data.message || 'Could not change your email.' });
             }
         } catch (err) {
-            setMsg({ type: 'err', text: err.response?.data?.message || 'Could not reach the server. Try again.' });
+            if (!limit.start(err)) {
+                setMsg({ type: 'err', text: err.response?.data?.message || 'Could not reach the server. Try again.' });
+            }
         } finally {
             setBusy(false);
         }
@@ -283,11 +295,11 @@ function ChangeEmailPanel({ passwordSet, onChanged }) {
                         Changing your email signs you out on every other device.
                     </p>
                     <div className="flex flex-wrap gap-2">
-                        <button type="submit" className="btn-primary" disabled={busy}>
+                        <button type="submit" className="btn-primary" disabled={disabled}>
                             {busy ? 'Please wait…' : step === 'enter' ? 'Send code' : step === 'current' ? 'Continue' : 'Confirm change'}
                         </button>
                         {step !== 'enter' && (
-                            <button type="button" className="btn-outline" onClick={resend} disabled={busy}>
+                            <button type="button" className="btn-outline" onClick={resend} disabled={disabled}>
                                 Send a new code
                             </button>
                         )}

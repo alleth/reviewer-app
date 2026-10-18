@@ -396,6 +396,16 @@ return [
                 : ['info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'],
             'scopes' => ['payments'],
         ],
+        // Rate-limit refusals (H4, App\Service\RateLimiter) are logged at info
+        // level in the `ratelimit` scope — bucket and a hashed key only, never
+        // an IP or email — and sent to stderr the same way, for tuning.
+        'ratelimit' => [
+            'className' => StderrLog::class,
+            'levels' => env('LOG_STDERR', '1') === '0'
+                ? ['__disabled__']
+                : ['info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'],
+            'scopes' => ['ratelimit'],
+        ],
     ],
 
     /*

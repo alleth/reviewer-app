@@ -6,6 +6,9 @@ const webpack = require('webpack');
 module.exports = (env, argv) => {
     const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost/reviewer_app';
     const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
+    // Cloudflare Turnstile (H4). Empty = no widget (local dev; the API skips
+    // the check when it has no secret either).
+    const turnstileSiteKey = process.env.REACT_APP_TURNSTILE_SITE_KEY || '';
 
     return {
         entry: './src/index.js',
@@ -58,6 +61,7 @@ module.exports = (env, argv) => {
             new webpack.DefinePlugin({
                 'process.env.REACT_APP_API_URL': JSON.stringify(apiUrl),
                 'process.env.REACT_APP_GOOGLE_CLIENT_ID': JSON.stringify(googleClientId),
+                'process.env.REACT_APP_TURNSTILE_SITE_KEY': JSON.stringify(turnstileSiteKey),
             }),
         ],
     };
