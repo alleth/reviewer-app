@@ -23,18 +23,53 @@ final class ClientIp
      */
     public static function from(ServerRequest $request): string
     {
-        $header = trim((string)env('RATE_LIMIT_IP_HEADER')) ?: 'X-Forwarded-For';
-        $raw = $request->getHeaderLine($header);
+        return self::select($request)[0];
+    }
+
+    /**
+     * TEMPORARY staging diagnostic (H4): which forwarding headers the request
+     * carries and which source from() picked. Presence flags and a count only,
+     * never an address, part of one or a hash of one.
+     *
+     * @return array{xff: bool, xff_entries: int, x_real_ip: bool, x_envoy_external_address: bool, remote_addr_fallback: bool, source: string}
+     */
+    public static function diagnose(ServerRequest $request): array
+    {
+        $xff = $request->getHeaderLine('X-Forwarded-For');
+        $source = self::select($request)[1];
+
+        return [
+            'xff' => $xff !== '',
+            'xff_entries' => $xff === '' ? 0 : count(explode(',', $xff)),
+            'x_real_ip' => $request->getHeaderLine('X-Real-IP') !== '',
+            'x_envoy_external_address' => $request->getHeaderLine('X-Envoy-External-Address') !== '',
+            'remote_addr_fallback' => $source === 'remote_addr' || $source === 'unknown',
+            'source' => $source,
+        ];
+    }
+
+    /**
+     * The client IP and where it came from: `xff_rightmost`, `custom_header`
+     * (RATE_LIMIT_IP_HEADER), `remote_addr` or `unknown`.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private static function select(ServerRequest $request): array
+    {
+        $custom = trim((string)env('RATE_LIMIT_IP_HEADER'));
+        $raw = $request->getHeaderLine($custom ?: 'X-Forwarded-For');
         if ($raw !== '') {
             $parts = array_map('trim', explode(',', $raw));
             $last = (string)end($parts);
             if (filter_var($last, FILTER_VALIDATE_IP) !== false) {
-                return $last;
+                return [$last, $custom !== '' ? 'custom_header' : 'xff_rightmost'];
             }
         }
 
         $remote = (string)$request->getEnv('REMOTE_ADDR');
 
-        return filter_var($remote, FILTER_VALIDATE_IP) !== false ? $remote : 'unknown';
+        return filter_var($remote, FILTER_VALIDATE_IP) !== false
+            ? [$remote, 'remote_addr']
+            : ['unknown', 'unknown'];
     }
 }

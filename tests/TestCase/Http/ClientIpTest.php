@@ -71,4 +71,43 @@ class ClientIpTest extends TestCase
 
         $this->assertSame('198.51.100.30', ClientIp::from($request));
     }
+
+    public function testDiagnoseReportsHeaderShapeAndSource(): void
+    {
+        $request = $this->request([
+            'HTTP_X_FORWARDED_FOR' => '1.2.3.4, 198.51.100.20',
+            'HTTP_X_REAL_IP' => '198.51.100.20',
+        ]);
+        $this->assertSame([
+            'xff' => true,
+            'xff_entries' => 2,
+            'x_real_ip' => true,
+            'x_envoy_external_address' => false,
+            'remote_addr_fallback' => false,
+            'source' => 'xff_rightmost',
+        ], ClientIp::diagnose($request));
+
+        $d = ClientIp::diagnose($this->request(['HTTP_X_ENVOY_EXTERNAL_ADDRESS' => '198.51.100.40']));
+        $this->assertSame(0, $d['xff_entries']);
+        $this->assertTrue($d['x_envoy_external_address']);
+        $this->assertTrue($d['remote_addr_fallback']);
+        $this->assertSame('remote_addr', $d['source']);
+
+        $this->setEnv('RATE_LIMIT_IP_HEADER', 'X-Real-IP');
+        $this->assertSame('custom_header', ClientIp::diagnose($request)['source']);
+    }
+
+    public function testDiagnoseNeverContainsAnAddress(): void
+    {
+        $request = $this->request([
+            'HTTP_X_FORWARDED_FOR' => '203.0.113.9, 198.51.100.20',
+            'HTTP_X_REAL_IP' => '198.51.100.21',
+            'HTTP_X_ENVOY_EXTERNAL_ADDRESS' => '2001:db8::77',
+        ]);
+        $flat = json_encode(ClientIp::diagnose($request));
+
+        foreach (['203.0', '198.51', '100.64', '2001:db8', '.9', '::77'] as $needle) {
+            $this->assertStringNotContainsString($needle, (string)$flat);
+        }
+    }
 }
