@@ -191,12 +191,14 @@ class UsersController extends AppController
             $yn = fn(bool $v): string => $v ? 'yes' : 'no';
             Log::info(sprintf(
                 '[clientip diag] bucket=%s xff=%s xff_entries=%d x_real_ip=%s x_envoy_external_address=%s'
-                . ' remote_addr_fallback=%s source=%s',
+                . ' xff_left_equals_real_ip=%s xff_right_is_internal=%s remote_addr_fallback=%s source=%s',
                 $bucket,
                 $yn($d['xff']),
                 $d['xff_entries'],
                 $yn($d['x_real_ip']),
                 $yn($d['x_envoy_external_address']),
+                $yn($d['xff_left_equals_real_ip']),
+                $yn($d['xff_right_is_internal']),
                 $yn($d['remote_addr_fallback']),
                 $d['source'],
             ), ['scope' => ['ratelimit']]);

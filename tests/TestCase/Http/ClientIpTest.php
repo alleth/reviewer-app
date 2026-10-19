@@ -83,9 +83,27 @@ class ClientIpTest extends TestCase
             'xff_entries' => 2,
             'x_real_ip' => true,
             'x_envoy_external_address' => false,
+            'xff_left_equals_real_ip' => false,
+            'xff_right_is_internal' => false,
             'remote_addr_fallback' => false,
             'source' => 'xff_rightmost',
         ], ClientIp::diagnose($request));
+
+        $railwayShape = $this->request([
+            'HTTP_X_FORWARDED_FOR' => '198.51.100.20, 100.64.0.5',
+            'HTTP_X_REAL_IP' => '198.51.100.20',
+        ]);
+        $d = ClientIp::diagnose($railwayShape);
+        $this->assertTrue($d['xff_left_equals_real_ip']);
+        $this->assertTrue($d['xff_right_is_internal'], '100.64.0.0/10 is internal');
+        foreach (['10.1.2.3', '192.168.0.1', '127.0.0.1', 'fd00::1'] as $internal) {
+            $hop = $this->request(['HTTP_X_FORWARDED_FOR' => "198.51.100.20, $internal"]);
+            $this->assertTrue(ClientIp::diagnose($hop)['xff_right_is_internal'], $internal);
+        }
+        $this->assertFalse(
+            ClientIp::diagnose($this->request(['HTTP_X_FORWARDED_FOR' => '100.128.0.1']))['xff_right_is_internal'],
+            'Just outside 100.64.0.0/10',
+        );
 
         $d = ClientIp::diagnose($this->request(['HTTP_X_ENVOY_EXTERNAL_ADDRESS' => '198.51.100.40']));
         $this->assertSame(0, $d['xff_entries']);

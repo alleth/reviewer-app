@@ -411,7 +411,7 @@ class UsersRateLimitTest extends TestCase
             $this->assertCount(1, $lines);
             $this->assertStringContainsString(
                 'bucket=forgot_ip xff=yes xff_entries=2 x_real_ip=no x_envoy_external_address=no'
-                . ' remote_addr_fallback=no source=xff_rightmost',
+                . ' xff_left_equals_real_ip=no xff_right_is_internal=no remote_addr_fallback=no source=xff_rightmost',
                 $lines[0],
             );
             $this->assertStringNotContainsString('203.0', $lines[0]);
