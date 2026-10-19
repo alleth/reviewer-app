@@ -7,6 +7,7 @@ use App\Auth\GoogleTokenVerifier;
 use App\Auth\GoogleTokenVerifierInterface;
 use App\Auth\InvalidGoogleCredentialException;
 use App\Model\Entity\User;
+use App\Service\RateLimiter;
 use App\Test\TestSuite\ApiTestTrait;
 use App\Test\TestSuite\GoogleKeysTestTrait;
 use Cake\Event\EventInterface;
@@ -41,6 +42,7 @@ class UsersVerificationTest extends TestCase
         'app.AuthCodes',
         'app.LoginEvents',
         'app.LoginAttempts',
+        'app.RateLimits',
         'app.Passes',
     ];
 
@@ -432,7 +434,7 @@ class UsersVerificationTest extends TestCase
 
     public function testWrongPasswordOnUnverifiedAccountIsANormalFailure(): void
     {
-        $this->createUser('pending@example.com');
+        $user = $this->createUser('pending@example.com');
 
         $this->ajaxPost('/api/login', ['user_name' => 'pending', 'user_pass' => 'wrong-password']);
 
@@ -440,9 +442,12 @@ class UsersVerificationTest extends TestCase
         $this->assertFalse($body['success']);
         $this->assertArrayNotHasKey('needsVerification', $body);
         $this->assertCount(0, $this->emailedCodes('pending@example.com'));
+        // Counted like any other failure, against the account (H4).
         $this->assertSame(
             1,
-            $this->getTableLocator()->get('LoginAttempts')->find()->where(['identifier' => 'pending'])->count(),
+            $this->getTableLocator()->get('RateLimits')->find()
+                ->where(['bucket' => 'login_fail', 'key_hash' => RateLimiter::key('u', (string)$user->user_id)])
+                ->count(),
         );
     }
 

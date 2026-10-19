@@ -35,6 +35,7 @@ class PaymentsControllerTest extends TestCase
     protected array $fixtures = [
         'app.Users',
         'app.Passes',
+        'app.RateLimits',
     ];
 
     protected function setUp(): void

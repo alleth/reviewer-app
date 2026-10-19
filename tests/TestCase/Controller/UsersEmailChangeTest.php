@@ -41,6 +41,7 @@ class UsersEmailChangeTest extends TestCase
         'app.AuthCodes',
         'app.LoginEvents',
         'app.LoginAttempts',
+        'app.RateLimits',
         'app.Passes',
     ];
 
@@ -304,8 +305,11 @@ class UsersEmailChangeTest extends TestCase
         $this->changeEmail(['new_email' => self::NEW_EMAIL, 'code' => $code]);
         $this->assertResponseOk();
 
+        // Only the code-less send-limit rows stay (forgot password goes through
+        // sendLimitedCode() since H4, so it leaves one too).
         $left = $this->codes()->find()->where(['user_id' => 1])->all()->extract('purpose')->toList();
-        $this->assertSame(['change_email_sent'], $left);
+        sort($left);
+        $this->assertSame(['change_email_sent', 'password_reset_sent'], $left);
     }
 
     public function testTheCurrentAddressInAnotherCaseIs422(): void

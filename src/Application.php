@@ -6,6 +6,8 @@ namespace App;
 use App\Auth\GoogleTokenVerifier;
 use App\Auth\GoogleTokenVerifierInterface;
 use App\Middleware\CorsMiddleware;
+use App\Security\TurnstileVerifier;
+use App\Security\TurnstileVerifierInterface;
 use Cake\Core\Configure;
 use Cake\Core\ContainerInterface;
 use Cake\Datasource\FactoryLocator;
@@ -61,5 +63,7 @@ class Application extends BaseApplication
     {
         // Injected into UsersController::googleLogin(); tests replace it with mockService().
         $container->add(GoogleTokenVerifierInterface::class, GoogleTokenVerifier::class);
+        // Injected into UsersController::register() and forgotPassword() (H4).
+        $container->add(TurnstileVerifierInterface::class, TurnstileVerifier::class);
     }
 }

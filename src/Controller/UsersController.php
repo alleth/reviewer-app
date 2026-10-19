@@ -5,9 +5,12 @@ namespace App\Controller;
 
 use App\Auth\GoogleTokenVerifierInterface;
 use App\Auth\InvalidGoogleCredentialException;
+use App\Http\ClientIp;
 use App\Mailer\Transport\BrevoTransport;
 use App\Model\Entity\User;
 use App\Model\Table\UsersTable;
+use App\Security\TurnstileVerifierInterface;
+use App\Service\RateLimiter;
 use Cake\Http\Response;
 use Cake\I18n\DateTime;
 use Cake\Log\Log;
@@ -39,9 +42,47 @@ class UsersController extends AppController
     /** Distinct devices within 60s that trips the login-challenge guard. */
     private const DEVICE_SWITCH_LIMIT = 4;
 
-    /** Failed password attempts per identifier within the window that trip the throttle. */
-    private const LOGIN_MAX_FAILURES = 10;
-    private const LOGIN_FAILURE_WINDOW_MINUTES = 15;
+    /**
+     * Sign-in escalation (H4), on failures for the account (username and
+     * email share one bucket) or, for an unknown name, the typed identifier:
+     * from 5 in the last hour a 30 s wait after each failure; from 10 a
+     * correct password also needs an emailed code (step-up); from 20 a 15 min
+     * wait, and from 50 in a day an hour. Never a permanent lock.
+     */
+    private const LOGIN_DELAY_AFTER = 5;
+    private const LOGIN_DELAY_SECONDS = 30;
+    private const LOGIN_STEP_UP_AFTER = 10;
+    private const LOGIN_LONG_WAIT_AFTER = 20;
+    private const LOGIN_LONG_WAIT_SECONDS = 900;
+    private const LOGIN_DAY_WAIT_AFTER = 50;
+    private const LOGIN_DAY_WAIT_SECONDS = 3600;
+
+    /**
+     * Wrong guesses allowed per purpose and account (or, for an address with
+     * no account, per address) across every code issued: a new code no longer
+     * brings fresh guesses (H4).
+     *
+     * @var list<array{0: int, 1: int}>
+     */
+    private const CODE_GUESS_LIMITS = [[10, 3600], [50, 86400]];
+
+    /**
+     * Per-client-IP limits (H4). Log-only until RATE_LIMIT_IP_MODE=enforce.
+     *
+     * @var array<string, list<array{0: int, 1: int}>>
+     */
+    private const IP_LIMITS = [
+        'login_fail_ip' => [[50, 900]],
+        'forgot_ip' => [[10, 3600], [30, 86400]],
+        'reset_ip' => [[30, 3600]],
+        'resend_ip' => [[10, 3600]],
+        'register_ip' => [[5, 3600], [20, 86400]],
+        'google_ip' => [[30, 600]],
+    ];
+
+    /** Wrong current passwords while signed in (changePassword, changeEmail). */
+    private const REAUTH_FAIL_LIMIT = 5;
+    private const REAUTH_FAIL_WINDOW_SECONDS = 900;
 
     /**
      * Codes sent through sendLimitedCode(): email verification (B3-V) and
@@ -63,6 +104,17 @@ class UsersController extends AppController
 
     private const CODE_RESEND_COOLDOWN_SECONDS = 60;
     private const CODE_MAX_SENDS_PER_DAY = 10;
+
+    /**
+     * Daily send caps that differ from CODE_MAX_SENDS_PER_DAY. Password reset
+     * is higher so that someone else can't easily use up the owner's
+     * allowance; per-IP limits and Turnstile sit in front of it (H4).
+     *
+     * @var array<string, int>
+     */
+    private const CODE_SENDS_PER_DAY = ['password_reset' => 20];
+
+    private ?RateLimiter $limiter = null;
 
     /** A hash that stays stable per browser/device (used by the guard). */
     private function deviceHash(): string
@@ -90,69 +142,219 @@ class UsersController extends AppController
     }
 
     /**
-     * Password brute-force throttle. Returns a 429 response when this identifier
-     * has had too many failed attempts inside the window, else null. Runs before
-     * the password is checked so a locked bucket costs one COUNT query.
+     * The request's rate limiter, created on first use.
      */
-    private function loginThrottle(string $identifier): ?Response
+    private function limiter(): RateLimiter
     {
-        if ($identifier === '') {
-            return null;
-        }
-
-        $since = (new DateTime())->modify('-' . self::LOGIN_FAILURE_WINDOW_MINUTES . ' minutes');
-        $recent = $this->fetchTable('LoginAttempts')->find()
-            ->where(['identifier' => $identifier, 'created >=' => $since])
-            ->count();
-
-        if ($recent < self::LOGIN_MAX_FAILURES) {
-            return null;
-        }
-
-        return $this->json([
-            'success' => false,
-            'message' => 'Too many failed sign-in attempts. Please wait about '
-                . self::LOGIN_FAILURE_WINDOW_MINUTES
-                . ' minutes and try again, or reset your password.',
-        ], 429);
+        return $this->limiter ??= new RateLimiter();
     }
 
-    /** Records one failed login against the identifier and prunes day-old rows. */
-    private function recordLoginFailure(string $identifier): void
+    /** The rate-limit key for an account. */
+    private function accountKey(int $userId): string
     {
-        if ($identifier === '') {
-            return;
-        }
-
-        $attempts = $this->fetchTable('LoginAttempts');
-        $attempts->save($attempts->newEntity([
-            'identifier' => $identifier,
-            'created' => new DateTime(),
-        ]));
-        // Opportunistic prune — keeps the table from growing unbounded without a cron.
-        $attempts->deleteAll(['created <' => (new DateTime())->modify('-1 day')]);
+        return RateLimiter::key('u', (string)$userId);
     }
 
-    /** Clears every failed-login row for the identifier (called on a correct password). */
-    private function clearLoginFailures(string $identifier): void
+    /** The rate-limit key for this request's client IP. */
+    private function ipKey(): string
     {
-        if ($identifier === '') {
-            return;
-        }
-
-        $this->fetchTable('LoginAttempts')->deleteAll(['identifier' => $identifier]);
+        return RateLimiter::key('ip', ClientIp::from($this->request));
     }
 
     /**
-     * The rapid device-switch guard. Returns a challenge response array (to send
-     * instead of logging in) when this account has been accessed from too many
-     * devices in the last minute or already has a pending challenge; returns
-     * null when the login may proceed. A correct `$code` clears the guard.
-     *
-     * @return array<string, mixed>|null
+     * The standard 429: `reason: rate_limited` and `retryAfter` seconds, plus a
+     * Retry-After header, so the SPA can count down.
      */
-    private function loginChallenge(int $userId, string $email, string $code): ?array
+    private function tooMany(int $seconds): Response
     {
+        $wait = $seconds < 120
+            ? $seconds . ' second' . ($seconds === 1 ? '' : 's')
+            : (int)ceil($seconds / 60) . ' minutes';
+
+        return $this->json([
+            'success' => false,
+            'reason' => 'rate_limited',
+            'retryAfter' => $seconds,
+            'message' => "Too many attempts. Please try again in {$wait}.",
+        ], 429)->withHeader('Retry-After', (string)$seconds);
+    }
+
+    /**
+     * Per-IP limit for $bucket (see IP_LIMITS): checks, then counts this
+     * request. A 429 when over, else null.
+     */
+    private function ipLimited(string $bucket): ?Response
+    {
+        $key = $this->ipKey();
+        $wait = $this->limiter()->retryAfter($bucket, $key, self::IP_LIMITS[$bucket], true);
+        if ($wait !== null) {
+            return $this->tooMany($wait);
+        }
+        $this->limiter()->hit($bucket, $key, true);
+
+        return null;
+    }
+
+    /**
+     * Where sign-in stands for $key after its recent failures: how long to
+     * wait (null = no wait) and whether a correct password also needs an
+     * emailed code. Both follow RATE_LIMIT_MODE.
+     *
+     * @return array{wait: int|null, stepUp: bool}
+     */
+    private function loginEscalation(string $key): array
+    {
+        $limiter = $this->limiter();
+        if (RateLimiter::mode() === RateLimiter::MODE_OFF) {
+            return ['wait' => null, 'stepUp' => false];
+        }
+
+        $lastHour = $limiter->count('login_fail', $key, 3600);
+        $lastDay = $limiter->count('login_fail', $key, 86400);
+        $last = $limiter->lastHit('login_fail', $key);
+
+        $delay = match (true) {
+            $lastDay >= self::LOGIN_DAY_WAIT_AFTER => self::LOGIN_DAY_WAIT_SECONDS,
+            $lastHour >= self::LOGIN_LONG_WAIT_AFTER => self::LOGIN_LONG_WAIT_SECONDS,
+            $lastHour >= self::LOGIN_DELAY_AFTER => self::LOGIN_DELAY_SECONDS,
+            default => 0,
+        };
+        $wait = null;
+        if ($delay > 0 && $last !== null) {
+            $remaining = $delay - ((new DateTime())->getTimestamp() - $last->getTimestamp());
+            $wait = $remaining > 0 ? $remaining : null;
+        }
+
+        $enforce = RateLimiter::mode() === RateLimiter::MODE_ENFORCE;
+
+        return [
+            'wait' => $limiter->decide('login_fail', $key, $wait),
+            'stepUp' => $enforce && $lastHour >= self::LOGIN_STEP_UP_AFTER,
+        ];
+    }
+
+    /**
+     * Checks a code against the guess budget for its purpose (H4). True when
+     * right (and the budget is reset), false when wrong (and counted), or the
+     * seconds to wait when the budget is used up (nothing is checked then).
+     * `$budgetKey` is the account's key, or for an address with no account
+     * the address's, so both answer alike.
+     */
+    private function checkCode(
+        ?int $userId,
+        string $purpose,
+        string $code,
+        string $budgetKey,
+        string $binding = '',
+        bool $consume = true,
+    ): bool|int {
+        $bucket = 'code_guess:' . $purpose;
+        $wait = $this->limiter()->retryAfter($bucket, $budgetKey, self::CODE_GUESS_LIMITS);
+        if ($wait !== null) {
+            return $wait;
+        }
+
+        $ok = $userId !== null && $code !== '' && $this->consumeCode($userId, $purpose, $code, $binding, $consume);
+        if ($ok) {
+            $this->limiter()->clear($bucket, $budgetKey);
+        } else {
+            $this->limiter()->hit($bucket, $budgetKey);
+        }
+
+        return $ok;
+    }
+
+    /**
+     * The budget key for a code tied to an email address: the account's if
+     * there is one, else the address's (I5), so a missing account looks the
+     * same as a wrong code.
+     */
+    private function codeBudgetKey(?User $user, string $email): string
+    {
+        return $user !== null
+            ? $this->accountKey((int)$user->user_id)
+            : RateLimiter::key('id', UsersTable::normalizeEmail($email));
+    }
+
+    /**
+     * A 429 when this account has had too many wrong current passwords while
+     * signed in (changePassword, changeEmail), else null.
+     */
+    private function reauthLimited(int $userId): ?Response
+    {
+        $wait = $this->limiter()->retryAfter(
+            'reauth_fail',
+            $this->accountKey($userId),
+            [[self::REAUTH_FAIL_LIMIT, self::REAUTH_FAIL_WINDOW_SECONDS]],
+        );
+
+        return $wait !== null ? $this->tooMany($wait) : null;
+    }
+
+    /**
+     * Counts a wrong current password while signed in. The attempt that
+     * reaches the limit also emails the owner, at most once per window.
+     */
+    private function recordReauthFailure(User $user): void
+    {
+        $limiter = $this->limiter();
+        $key = $this->accountKey((int)$user->user_id);
+        $limiter->hit('reauth_fail', $key);
+
+        if (
+            $limiter->count('reauth_fail', $key, self::REAUTH_FAIL_WINDOW_SECONDS) >= self::REAUTH_FAIL_LIMIT
+            && $limiter->count('reauth_notice', $key, self::REAUTH_FAIL_WINDOW_SECONDS) === 0
+        ) {
+            $limiter->hit('reauth_notice', $key);
+            $this->sendMail(
+                (string)$user->email,
+                'Several wrong password attempts on your CareerPass account',
+                'Several wrong password attempts were made while signed in to your CareerPass account. '
+                . "If this wasn't you, sign out of other devices by changing your password.",
+            );
+        }
+    }
+
+    /**
+     * The Turnstile check for register and forgot password (H4): 400 for a
+     * missing or invalid token when a secret is configured; skipped without
+     * one; allowed through (and logged) when Cloudflare can't be asked.
+     */
+    private function turnstileBlocked(TurnstileVerifierInterface $turnstile): ?Response
+    {
+        if (!$turnstile->isEnabled()) {
+            return null;
+        }
+
+        $token = trim($this->textField($this->request->getData(), 'turnstile_token'));
+        $valid = $token === '' ? false : $turnstile->verify($token, ClientIp::from($this->request));
+        if ($valid === null) {
+            Log::warning('[turnstile] verification unavailable; allowed (fail open)');
+
+            return null;
+        }
+        if (!$valid) {
+            return $this->json(
+                ['success' => false, 'message' => 'Please complete the security check and try again.'],
+                400,
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * The emailed-code check before a password sign-in: the rapid
+     * device-switch guard, and (H4) the step-up after repeated failures when
+     * `$force` is set. Returns a challenge response array (to send instead of
+     * logging in), the seconds to wait when the code-guess budget is used up,
+     * or null when the login may proceed. A correct `$code` clears the guard.
+     *
+     * @return array<string, mixed>|int|null
+     */
+    private function loginChallenge(User $user, string $code, bool $force = false): array|int|null
+    {
+        $userId = (int)$user->user_id;
         $events = $this->fetchTable('LoginEvents');
         // Count distinct devices in PHP: a DISTINCT/GROUP BY count subquery
         // trips MySQL's only_full_group_by, and the row set here is tiny.
@@ -168,22 +370,31 @@ class UsersController extends AppController
             ->where(['user_id' => $userId, 'purpose' => 'login_challenge', 'expires >' => new DateTime()])
             ->first();
 
-        if ($recentDevices < self::DEVICE_SWITCH_LIMIT && $pending === null) {
+        if (!$force && $recentDevices < self::DEVICE_SWITCH_LIMIT && $pending === null) {
             return null;
         }
 
-        if ($code !== '' && $this->consumeCode($userId, 'login_challenge', $code)) {
-            $events->deleteAll(['user_id' => $userId]);
+        if ($code !== '') {
+            $checked = $this->checkCode($userId, 'login_challenge', $code, $this->accountKey($userId));
+            if (is_int($checked)) {
+                return $checked;
+            }
+            if ($checked) {
+                $events->deleteAll(['user_id' => $userId]);
 
-            return null;
+                return null;
+            }
         }
 
         if ($code === '' && !$pending) {
-            $this->sendAuthCode(
-                $email,
-                $this->issueCode($userId, 'login_challenge'),
-                'Your CareerPass account was accessed from several devices very quickly, '
-                . 'so we need to confirm this sign-in.',
+            $this->sendLimitedCode(
+                $user,
+                'login_challenge',
+                $force
+                    ? 'There were several unsuccessful attempts to sign in to your CareerPass account, '
+                        . 'so we need to confirm this sign-in.'
+                    : 'Your CareerPass account was accessed from several devices very quickly, '
+                        . 'so we need to confirm this sign-in.',
             );
         }
 
@@ -330,9 +541,10 @@ class UsersController extends AppController
     /**
      * Emails a fresh `$purpose` code to the account — unless one went out in
      * the last CODE_RESEND_COOLDOWN_SECONDS, or the account has already been
-     * sent CODE_MAX_SENDS_PER_DAY for this purpose in 24 hours (with 5 guesses
-     * a code, that caps guessing at 50 a day, and bounds how much mail anyone
-     * can make the inbox receive). Every send leaves a code-less
+     * sent its daily cap for this purpose in 24 hours (CODE_MAX_SENDS_PER_DAY,
+     * or CODE_SENDS_PER_DAY for the purposes that differ). That bounds how
+     * much mail anyone can make the inbox receive; guessing is bounded
+     * separately by checkCode()'s budget. Every send leaves a code-less
      * `<purpose>_sent` row, so both limits survive issueCode() replacing the
      * code. Callers answer the same way whether or not a code went out.
      *
@@ -364,7 +576,8 @@ class UsersController extends AppController
         $last = $sent->first();
         $coolingDown = $last !== null
             && $last->created->greaterThan($now->modify('-' . self::CODE_RESEND_COOLDOWN_SECONDS . ' seconds'));
-        if ($coolingDown || $sent->count() >= self::CODE_MAX_SENDS_PER_DAY) {
+        $dailyCap = self::CODE_SENDS_PER_DAY[$purpose] ?? self::CODE_MAX_SENDS_PER_DAY;
+        if ($coolingDown || $sent->count() >= $dailyCap) {
             return false;
         }
 
@@ -434,7 +647,11 @@ class UsersController extends AppController
             ]);
         }
 
-        if (!$this->consumeCode($userId, self::PURPOSE_LINK_GOOGLE, $code)) {
+        $checked = $this->checkCode($userId, self::PURPOSE_LINK_GOOGLE, $code, $this->accountKey($userId));
+        if (is_int($checked)) {
+            return $this->tooMany($checked);
+        }
+        if (!$checked) {
             return $this->json(
                 ['success' => false, 'message' => 'That code is wrong or has expired. Request a new one.'],
                 400,
@@ -532,7 +749,8 @@ class UsersController extends AppController
 
     /**
      * Password sign-in by username or email. See CLAUDE.md (Authentication) for
-     * the throttle, the device-switch challenge and the email-verification step.
+     * the escalating delays and step-up (H4), the device-switch challenge and
+     * the email-verification step.
      */
     public function login(): Response
     {
@@ -547,31 +765,50 @@ class UsersController extends AppController
             // Automatically parses JSON or form data
             $data = $this->request->getData();
 
-            $username = $data['user_name'] ?? '';
-            $password = (string)($data['user_pass'] ?? '');
-            $identifier = $this->loginIdentifier((string)$username);
+            $username = $this->textField($data, 'user_name');
+            $password = $this->textField($data, 'user_pass');
+            $identifier = $this->loginIdentifier($username);
 
-            $throttled = $this->loginThrottle($identifier);
-            if ($throttled !== null) {
-                return $throttled;
+            $ipWait = $this->limiter()->retryAfter(
+                'login_fail_ip',
+                $this->ipKey(),
+                self::IP_LIMITS['login_fail_ip'],
+                true,
+            );
+            if ($ipWait !== null) {
+                return $this->tooMany($ipWait);
             }
 
             // The frontend advertises "Username or Email" on this field, so match
             // either. The email match ignores letter case (H3).
             $user = $this->Users->find()
-                ->where(['user_name' => (string)$username])
-                ->first() ?? $this->Users->findByEmailAddress((string)$username);
+                ->where(['user_name' => $username])
+                ->first() ?? $this->Users->findByEmailAddress($username);
+
+            // Failures count per account, whichever name was typed, or per
+            // typed identifier when there's no such account (H4).
+            $failKey = $user !== null
+                ? $this->accountKey((int)$user->user_id)
+                : RateLimiter::key('id', $identifier);
+            $escalation = $this->loginEscalation($failKey);
+            if ($escalation['wait'] !== null) {
+                return $this->tooMany($escalation['wait']);
+            }
 
             if ($user && $user->user_pass !== null && password_verify($password, $user->user_pass)) {
-                // Correct password — clear the guess counter for this identifier.
-                $this->clearLoginFailures($identifier);
+                // After repeated failures a correct password also needs the
+                // emailed code (step-up). It only shows after a correct
+                // password, so it reveals nothing about the account.
                 $challenge = $user->isEmailVerified()
                     ? $this->loginChallenge(
-                        (int)$user->user_id,
-                        (string)$user->email,
-                        trim((string)($data['code'] ?? '')),
+                        $user,
+                        trim($this->textField($data, 'code')),
+                        $escalation['stepUp'],
                     )
                     : null;
+                if (is_int($challenge)) {
+                    return $this->tooMany($challenge);
+                }
                 if (!$user->isEmailVerified()) {
                     // No session until the email address is proven (B3-V).
                     $this->sendLimitedCode(
@@ -594,6 +831,7 @@ class UsersController extends AppController
                     }
                     $this->recordLoginEvent((int)$user->user_id);
                     $this->startSession($user);
+                    $this->limiter()->clear('login_fail', $failKey);
                     $response = ['success' => true, 'user' => $this->withPurchases($user)];
                 }
             } elseif ($user && $user->user_pass === null) {
@@ -612,8 +850,10 @@ class UsersController extends AppController
                     ],
                 ];
             } else {
-                // Wrong password, or unknown account — count it against the identifier.
-                $this->recordLoginFailure($identifier);
+                // Wrong password, or unknown account: counts toward the
+                // escalation and the per-IP limit.
+                $this->limiter()->hit('login_fail', $failKey);
+                $this->limiter()->hit('login_fail_ip', $this->ipKey(), true);
                 $response = ['success' => false, 'message' => 'Invalid username or password'];
             }
         } catch (Throwable $e) {
@@ -637,6 +877,11 @@ class UsersController extends AppController
         $blocked = $this->requireAjaxHeader();
         if ($blocked !== null) {
             return $blocked;
+        }
+
+        $limited = $this->ipLimited('google_ip');
+        if ($limited !== null) {
+            return $limited;
         }
 
         try {
@@ -800,11 +1045,11 @@ class UsersController extends AppController
                 return $this->json(['success' => false, 'message' => $passwordError], 422);
             }
 
-            $code = trim((string)($data['code'] ?? ''));
+            $code = trim($this->textField($data, 'code'));
             if ($code === '') {
-                $this->sendAuthCode(
-                    (string)$user->email,
-                    $this->issueCode($userId, 'set_password'),
+                $this->sendLimitedCode(
+                    $user,
+                    'set_password',
                     "Confirm it's you before setting a password on your CareerPass account.",
                 );
 
@@ -816,7 +1061,11 @@ class UsersController extends AppController
                         'message' => 'We emailed you a 6-digit code to confirm it\'s you.',
                     ]));
             }
-            if (!$this->consumeCode($userId, 'set_password', $code)) {
+            $checked = $this->checkCode($userId, 'set_password', $code, $this->accountKey($userId));
+            if (is_int($checked)) {
+                return $this->tooMany($checked);
+            }
+            if (!$checked) {
                 return $this->json(
                     ['success' => false, 'message' => 'That code is wrong or has expired. Request a new one.'],
                     400,
@@ -957,9 +1206,16 @@ class UsersController extends AppController
                 if ($password === '') {
                     return $this->json(['success' => false, 'message' => 'Enter your current password.'], 422);
                 }
+                $limited = $this->reauthLimited($userId);
+                if ($limited !== null) {
+                    return $limited;
+                }
                 if (!password_verify($password, (string)$user->user_pass)) {
+                    $this->recordReauthFailure($user);
+
                     return $this->json(['success' => false, 'message' => 'Your current password is incorrect.'], 400);
                 }
+                $this->limiter()->clear('reauth_fail', $this->accountKey($userId));
             } else {
                 $currentCode = trim($this->textField($data, 'current_code'));
                 if ($currentCode === '') {
@@ -984,7 +1240,18 @@ class UsersController extends AppController
                 // Checked, not used up: the user may still need "Send a new
                 // code" for the new address, which repeats this request. It's
                 // deleted with every other code once the change goes through.
-                if (!$this->consumeCode($userId, self::PURPOSE_EMAIL_CHANGE_REAUTH, $currentCode, $binding, false)) {
+                $checked = $this->checkCode(
+                    $userId,
+                    self::PURPOSE_EMAIL_CHANGE_REAUTH,
+                    $currentCode,
+                    $this->accountKey($userId),
+                    $binding,
+                    false,
+                );
+                if (is_int($checked)) {
+                    return $this->tooMany($checked);
+                }
+                if (!$checked) {
                     return $this->json(
                         ['success' => false, 'message' => 'That code is wrong or has expired. Request a new one.'],
                         400,
@@ -1024,7 +1291,17 @@ class UsersController extends AppController
         $userId = (int)$user->user_id;
         $binding = UsersTable::normalizeEmail($newEmail);
 
-        if (!$this->consumeCode($userId, self::PURPOSE_CHANGE_EMAIL, $code, $binding)) {
+        $checked = $this->checkCode(
+            $userId,
+            self::PURPOSE_CHANGE_EMAIL,
+            $code,
+            $this->accountKey($userId),
+            $binding,
+        );
+        if (is_int($checked)) {
+            return $this->tooMany($checked);
+        }
+        if (!$checked) {
             return $this->json(
                 ['success' => false, 'message' => 'That code is wrong or has expired. Request a new one.'],
                 400,
@@ -1182,15 +1459,26 @@ class UsersController extends AppController
 
     /**
      * Password sign-up. The account starts unverified and gets no session until
-     * the emailed code is entered at /api/verify-email.
+     * the emailed code is entered at /api/verify-email. Behind Turnstile and a
+     * per-IP limit on new accounts (H4); only accounts actually created count,
+     * so a typo or a taken username doesn't use up the allowance.
      */
-    public function register(): Response
+    public function register(TurnstileVerifierInterface $turnstile): Response
     {
         $this->request->allowMethod(['post']);
 
         $blocked = $this->requireAjaxHeader();
         if ($blocked !== null) {
             return $blocked;
+        }
+
+        $failed = $this->turnstileBlocked($turnstile);
+        if ($failed !== null) {
+            return $failed;
+        }
+        $ipWait = $this->limiter()->retryAfter('register_ip', $this->ipKey(), self::IP_LIMITS['register_ip'], true);
+        if ($ipWait !== null) {
+            return $this->tooMany($ipWait);
         }
 
         try {
@@ -1213,6 +1501,7 @@ class UsersController extends AppController
             $user->user_pass = password_hash($plainPassword, PASSWORD_DEFAULT);
 
             if ($this->Users->save($user)) {
+                $this->limiter()->hit('register_ip', $this->ipKey(), true);
                 // No session until the address is proven: the SPA asks for the
                 // emailed code and posts it to /api/verify-email (B3-V).
                 $this->sendLimitedCode(
@@ -1279,9 +1568,10 @@ class UsersController extends AppController
     /**
      * Step 1 of password recovery: emails a code to the address if it belongs to
      * an account. Always reports success so the endpoint can't be used to probe
-     * which emails are registered.
+     * which emails are registered. Behind Turnstile and a per-IP limit; the
+     * code itself goes out at most once a minute and 20 times a day (H4).
      */
-    public function forgotPassword(): Response
+    public function forgotPassword(TurnstileVerifierInterface $turnstile): Response
     {
         $this->request->allowMethod(['post']);
         $blocked = $this->requireAjaxHeader();
@@ -1289,16 +1579,20 @@ class UsersController extends AppController
             return $blocked;
         }
 
-        $email = trim((string)$this->request->getData('email'));
+        $failed = $this->turnstileBlocked($turnstile);
+        if ($failed !== null) {
+            return $failed;
+        }
+        $limited = $this->ipLimited('forgot_ip');
+        if ($limited !== null) {
+            return $limited;
+        }
+
+        $email = trim($this->textField($this->request->getData(), 'email'));
         $user = $this->Users->findByEmailAddress($email);
 
         if ($user) {
-            $code = $this->issueCode((int)$user->user_id, 'password_reset');
-            $this->sendAuthCode(
-                (string)$user->email,
-                $code,
-                'We got a request to reset your CareerPass password.',
-            );
+            $this->sendLimitedCode($user, 'password_reset', 'We got a request to reset your CareerPass password.');
         }
 
         return $this->json([
@@ -1310,6 +1604,10 @@ class UsersController extends AppController
     /**
      * Step 2 of password recovery: verifies the emailed code and sets the new
      * password. Rotating session_token signs out every existing session.
+     * Guesses count against the code-guess budget (an unknown email has its
+     * own, so both answer alike) and a per-IP limit; a successful reset also
+     * clears the account's sign-in failures, so recovery never leaves the
+     * owner waiting (H4).
      */
     public function resetPassword(): Response
     {
@@ -1320,18 +1618,32 @@ class UsersController extends AppController
         }
 
         $data = $this->request->getData();
-        $email = trim((string)($data['email'] ?? ''));
-        $code = trim((string)($data['code'] ?? ''));
-        $password = (string)($data['password'] ?? '');
+        $email = trim($this->textField($data, 'email'));
+        $code = trim($this->textField($data, 'code'));
+        $password = $this->textField($data, 'password');
 
         $passwordError = $this->passwordError($password);
         if ($passwordError !== null) {
             return $this->json(['success' => false, 'message' => $passwordError], 422);
         }
 
-        $user = $this->Users->findByEmailAddress($email);
+        $limited = $this->ipLimited('reset_ip');
+        if ($limited !== null) {
+            return $limited;
+        }
 
-        if (!$user || !$this->consumeCode((int)$user->user_id, 'password_reset', $code)) {
+        $user = $this->Users->findByEmailAddress($email);
+        $checked = $this->checkCode(
+            $user?->user_id,
+            'password_reset',
+            $code,
+            $this->codeBudgetKey($user, $email),
+        );
+        if (is_int($checked)) {
+            return $this->tooMany($checked);
+        }
+
+        if (!$user || !$checked) {
             return $this->json(
                 ['success' => false, 'message' => 'That code is wrong or has expired. Request a new one.'],
                 400,
@@ -1349,6 +1661,9 @@ class UsersController extends AppController
             ]);
         }
         $this->Users->save($user);
+        $accountKey = $this->accountKey((int)$user->user_id);
+        $this->limiter()->clear('login_fail', $accountKey);
+        $this->limiter()->clear('reauth_fail', $accountKey);
 
         return $this->json([
             'success' => true,
@@ -1371,18 +1686,24 @@ class UsersController extends AppController
             return $blocked;
         }
 
-        $email = trim((string)$this->request->getData('email'));
-        $code = trim((string)$this->request->getData('code'));
+        $email = trim($this->textField($this->request->getData(), 'email'));
+        $code = trim($this->textField($this->request->getData(), 'code'));
 
         try {
             $user = $this->Users->findByEmailAddress($email);
 
-            if (
-                !$user
-                || $user->isEmailVerified()
-                || $code === ''
-                || !$this->consumeCode((int)$user->user_id, self::PURPOSE_VERIFY_EMAIL, $code)
-            ) {
+            // An already-verified account has no verify code, so it gets the
+            // same wrong-code answer (and uses up the same budget).
+            $checked = $this->checkCode(
+                $user !== null && !$user->isEmailVerified() ? (int)$user->user_id : null,
+                self::PURPOSE_VERIFY_EMAIL,
+                $code,
+                $this->codeBudgetKey($user, $email),
+            );
+            if (is_int($checked)) {
+                return $this->tooMany($checked);
+            }
+            if ($user === null || !$checked) {
                 return $this->json(
                     ['success' => false, 'message' => 'That code is wrong or has expired. Request a new one.'],
                     400,
@@ -1393,6 +1714,7 @@ class UsersController extends AppController
             $this->recordLoginEvent((int)$user->user_id);
             // startSession() saves the user, persisting email_verified_at too.
             $this->startSession($user);
+            $this->limiter()->clear('login_fail', $this->accountKey((int)$user->user_id));
 
             return $this->json(['success' => true, 'user' => $this->withPurchases($user)]);
         } catch (Throwable $e) {
@@ -1414,7 +1736,12 @@ class UsersController extends AppController
             return $blocked;
         }
 
-        $email = trim((string)$this->request->getData('email'));
+        $limited = $this->ipLimited('resend_ip');
+        if ($limited !== null) {
+            return $limited;
+        }
+
+        $email = trim($this->textField($this->request->getData(), 'email'));
 
         try {
             $user = $this->Users->findByEmailAddress($email);
@@ -1456,8 +1783,8 @@ class UsersController extends AppController
         }
 
         $data = $this->request->getData();
-        $current = (string)($data['current_password'] ?? '');
-        $next = (string)($data['new_password'] ?? '');
+        $current = $this->textField($data, 'current_password');
+        $next = $this->textField($data, 'new_password');
 
         $passwordError = $this->passwordError($next);
         if ($passwordError !== null) {
@@ -1472,9 +1799,16 @@ class UsersController extends AppController
                 409,
             );
         }
+        $limited = $this->reauthLimited($userId);
+        if ($limited !== null) {
+            return $limited;
+        }
         if (!password_verify($current, $user->user_pass)) {
+            $this->recordReauthFailure($user);
+
             return $this->json(['success' => false, 'message' => 'Your current password is incorrect.'], 400);
         }
+        $this->limiter()->clear('reauth_fail', $this->accountKey($userId));
         if (password_verify($next, $user->user_pass)) {
             return $this->json(
                 ['success' => false, 'message' => 'Your new password must be different from the current one.'],
