@@ -66,16 +66,20 @@ class UsersRateLimitTest extends TestCase
     }
 
     /**
-     * The next request as the SPA sends it, from $ip (the rightmost
-     * X-Forwarded-For entry, as Railway's proxy appends it).
+     * The next request as the SPA sends it, from $ip (X-Real-IP, as Railway's
+     * edge sets it), plus any X-Forwarded-For the client or proxy added.
      */
-    private function fromIp(string $ip = self::IP): void
+    private function fromIp(string $ip = self::IP, ?string $forwardedFor = null): void
     {
-        $this->replaceRequest(['headers' => [
+        $headers = [
             'X-Requested-With' => 'XMLHttpRequest',
             'Accept' => 'application/json',
-            'X-Forwarded-For' => $ip,
-        ]]);
+            'X-Real-IP' => $ip,
+        ];
+        if ($forwardedFor !== null) {
+            $headers['X-Forwarded-For'] = $forwardedFor;
+        }
+        $this->replaceRequest(['headers' => $headers]);
     }
 
     /**
@@ -378,7 +382,7 @@ class UsersRateLimitTest extends TestCase
         $this->setEnv('RATE_LIMIT_IP_MODE', 'enforce');
         $this->addEvents('forgot_ip', RateLimiter::key('ip', self::IP), 10, 60);
 
-        $this->fromIp('1.2.3.4, ' . self::IP);
+        $this->fromIp(self::IP, '1.2.3.4, 203.0.113.9');
         $this->post('/api/password/forgot', ['email' => 'jane@example.com']);
 
         $this->assertRateLimited();
