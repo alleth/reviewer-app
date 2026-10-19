@@ -384,44 +384,6 @@ class UsersRateLimitTest extends TestCase
         $this->assertRateLimited();
     }
 
-    /**
-     * TEMPORARY staging diagnostic: one line per per-IP check on staging only,
-     * with the header shape and source but no address.
-     */
-    public function testClientIpDiagnosticIsStagingOnlyAndCarriesNoAddress(): void
-    {
-        Log::setConfig('test_diag', ['className' => 'Array', 'levels' => ['info'], 'scopes' => ['ratelimit']]);
-        $engine = Log::engine('test_diag');
-        $this->assertInstanceOf(ArrayLog::class, $engine);
-        $diag = fn(): array => array_values(array_filter(
-            $engine->read(),
-            fn(string $line): bool => str_contains($line, '[clientip diag]'),
-        ));
-
-        try {
-            $this->setEnv('RAILWAY_ENVIRONMENT_NAME', 'production');
-            $this->fromIp('203.0.113.9, ' . self::IP);
-            $this->post('/api/password/forgot', ['email' => 'jane@example.com']);
-            $this->assertSame([], $diag(), 'Nothing outside staging');
-
-            $this->setEnv('RAILWAY_ENVIRONMENT_NAME', 'staging');
-            $this->fromIp('203.0.113.9, ' . self::IP);
-            $this->post('/api/password/forgot', ['email' => 'jane@example.com']);
-            $lines = $diag();
-            $this->assertCount(1, $lines);
-            $this->assertStringContainsString(
-                'bucket=forgot_ip xff=yes xff_entries=2 x_real_ip=no x_envoy_external_address=no'
-                . ' xff_left_equals_real_ip=no xff_right_is_internal=no remote_addr_fallback=no source=xff_rightmost',
-                $lines[0],
-            );
-            $this->assertStringNotContainsString('203.0', $lines[0]);
-            $this->assertStringNotContainsString('198.51', $lines[0]);
-            $this->assertStringNotContainsString('jane', $lines[0]);
-        } finally {
-            Log::drop('test_diag');
-        }
-    }
-
     public function testRegistrationCountsOnlyCreatedAccountsPerIp(): void
     {
         $this->setEnv('RATE_LIMIT_IP_MODE', 'enforce');
