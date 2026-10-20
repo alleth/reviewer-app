@@ -36,7 +36,7 @@ if (empty($_SERVER['HTTP_HOST']) && !Configure::read('App_old.fullBaseUrl')) {
 }
 
 // DebugKit skips settings these connection config if PHP SAPI is CLI / PHPDBG.
-// But since PagesControllerTest is run with debug enabled and DebugKit is loaded
+// But since integration tests run with debug enabled and DebugKit is loaded
 // in application, without setting up these config DebugKit errors out.
 ConnectionManager::setConfig('test_debug_kit', [
     'className' => 'Cake\Database\Connection',

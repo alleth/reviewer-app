@@ -5,6 +5,7 @@ namespace App;
 
 use App\Auth\GoogleTokenVerifier;
 use App\Auth\GoogleTokenVerifierInterface;
+use App\Middleware\AjaxHeaderMiddleware;
 use App\Middleware\CorsMiddleware;
 use App\Security\TurnstileVerifier;
 use App\Security\TurnstileVerifierInterface;
@@ -43,6 +44,9 @@ class Application extends BaseApplication
     {
         $middlewareQueue
             ->add(new CorsMiddleware())
+            // CSRF: state-changing requests need X-Requested-With (H6). After
+            // CORS, so its 403 still carries the CORS headers the SPA needs.
+            ->add(new AjaxHeaderMiddleware())
             ->add(new ErrorHandlerMiddleware(Configure::read('Error'), $this))
             ->add(new AssetMiddleware([
                 'cacheTime' => Configure::read('Asset.cacheTime'),

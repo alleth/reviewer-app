@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Test\TestCase\Controller\Api;
 
 use App\Test\TestSuite\ApiTestTrait;
+use Cake\Core\Configure;
 use Cake\I18n\DateTime;
 use Cake\TestSuite\IntegrationTestTrait;
 use Cake\TestSuite\TestCase;
@@ -142,16 +143,28 @@ class ContentAccessTest extends TestCase
         }
     }
 
-    public function testWritesStayDisabled(): void
+    public function testThereAreNoWriteRoutes(): void
     {
         $this->givePass();
         $this->loginAs(1);
-        $this->asAjax();
+        Configure::write('debug', false);
+        $topics = $this->getTableLocator()->get('Topics');
+        $before = $topics->find()->count();
 
-        $this->post('/api/topics', ['name' => 'New topic']);
+        foreach (
+            [
+                ['post', '/api/topics'],
+                ['put', '/api/topics/1'],
+                ['patch', '/api/topics/1'],
+                ['delete', '/api/topics/1'],
+            ] as [$method, $url]
+        ) {
+            $this->asAjax();
+            $this->{$method}($url, ['name' => 'New topic']);
 
-        $this->assertResponseCode(403);
-        $this->assertSame('This endpoint is not available.', $this->responseJson()['message'] ?? null);
+            $this->assertResponseCode(404, "$method $url");
+        }
+        $this->assertSame($before, $topics->find()->count(), 'Nothing was written');
     }
 
     public function testAnUnverifiedAccountIs401EvenWithAPass(): void

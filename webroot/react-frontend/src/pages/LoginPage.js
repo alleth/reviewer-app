@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
-import InitialsAvatar from '../components/ui/InitialsAvatar';
 import PasswordRecovery from '../components/PasswordRecovery';
 import Turnstile from '../components/Turnstile';
 import useRateLimit from '../components/useRateLimit';
@@ -26,9 +25,10 @@ function LoginPage({ mode = 'login', onClose }) {
         confirmPassword: ''
     });
     const [error, setError] = useState('');
-    // Set when login() reports the matched account has no password yet (Google-only
-    // account) — swaps the form for a personalized "continue with Google" prompt.
-    const [pendingAccount, setPendingAccount] = useState(null);
+    // Set after a failed password sign-in. The API answers every failure the same
+    // way (H5) — it never says an account is Google-only — so the hint is shown
+    // for any failure.
+    const [googleHint, setGoogleHint] = useState(false);
     // Set when register() or login() says the account's email isn't verified yet —
     // swaps the form for the "enter the code we emailed you" step. No session
     // exists until /api/verify-email accepts the code.
@@ -94,6 +94,7 @@ function LoginPage({ mode = 'login', onClose }) {
 
     const handleLogin = async (e) => {
         e.preventDefault();
+        setGoogleHint(false);
         try {
             const res = await api.post('/api/login', {
                 user_name: formData.username,
@@ -104,9 +105,6 @@ function LoginPage({ mode = 'login', onClose }) {
             if (res.data.success) {
                 localStorage.setItem('skillsprint_user', JSON.stringify(res.data.user));
                 window.location.href = '/';
-            } else if (res.data.needsGoogleSetup) {
-                setPendingAccount(res.data.account);
-                setError('');
             } else if (res.data.needsVerification) {
                 startVerification(res.data);
             } else if (res.data.needsCode) {
@@ -114,6 +112,7 @@ function LoginPage({ mode = 'login', onClose }) {
                 setError(res.data.message || 'Enter the code we emailed you.');
             } else {
                 setError(res.data.message || 'Invalid credentials');
+                setGoogleHint(true);
             }
         } catch (err) {
             if (rateLimited(err)) return;
@@ -206,9 +205,6 @@ function LoginPage({ mode = 'login', onClose }) {
 
     // Used only from the "this account needs setup" prompt below — always sends the
     // user to finish setting a password instead of straight to the dashboard.
-    const handleGoogleSetupSuccess = (credentialResponse) =>
-        signInWithGoogle(credentialResponse.credential, '/account-setup');
-
     // B3-L: the code step sends the same Google credential again, with the code.
     const handleLinkVerify = async (e) => {
         e.preventDefault();
@@ -369,46 +365,6 @@ function LoginPage({ mode = 'login', onClose }) {
         );
     }
 
-    if (pendingAccount) {
-        return (
-            <div className="p-2 text-center">
-                <InitialsAvatar
-                    fname={pendingAccount.fname}
-                    lname={pendingAccount.lname}
-                    email={pendingAccount.email}
-                    size={56}
-                    className="mx-auto"
-                />
-                <h4 className="mt-4 text-lg font-bold text-gray-900 dark:text-gray-100">
-                    {[pendingAccount.fname, pendingAccount.lname].filter(Boolean).join(' ') || pendingAccount.email}
-                </h4>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{pendingAccount.email}</p>
-
-                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300">
-                    For your security, this account needs a one-time setup. Continue with Google to finish it.
-                </div>
-
-                {shownError && (
-                    <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
-                        {shownError}
-                    </div>
-                )}
-
-                <div className="mt-5 flex justify-center">
-                    <GoogleLogin onSuccess={handleGoogleSetupSuccess} onError={handleGoogleError} width="320" />
-                </div>
-
-                <button
-                    type="button"
-                    className="btn-link mt-4 w-full text-center text-gray-500 dark:text-gray-400"
-                    onClick={() => { setPendingAccount(null); setError(''); }}
-                >
-                    Use a different account
-                </button>
-            </div>
-        );
-    }
-
     return (
         <div className="p-2">
             <h4 className="mb-4 text-center text-xl font-bold text-gray-900 dark:text-gray-100">
@@ -418,6 +374,11 @@ function LoginPage({ mode = 'login', onClose }) {
             {shownError && (
                 <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
                     {shownError}
+                    {mode !== 'signup' && googleHint && !limit.message && (
+                        <p className="mt-1 text-red-600/90 dark:text-red-300/90">
+                            Signed up with Google? Use the Google button below instead.
+                        </p>
+                    )}
                 </div>
             )}
 

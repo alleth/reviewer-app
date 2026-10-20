@@ -21,26 +21,6 @@ parameters:
 			path: src/Console/Installer.php
 
 		-
-			message: "#^Method App\\\\Controller\\\\Api\\\\LoginController\\:\\:logout\\(\\) has no return type specified\\.$#"
-			count: 1
-			path: src/Controller/Api/LoginController.php
-
-		-
-			message: "#^Method App\\\\Controller\\\\Api\\\\LoginController\\:\\:options\\(\\) has no return type specified\\.$#"
-			count: 1
-			path: src/Controller/Api/LoginController.php
-
-		-
-			message: "#^Method App\\\\Controller\\\\Api\\\\LoginController\\:\\:options\\(\\) has parameter \\$args with no type specified\\.$#"
-			count: 1
-			path: src/Controller/Api/LoginController.php
-
-		-
-			message: "#^Method App\\\\Controller\\\\Api\\\\LoginController\\:\\:sessionCheck\\(\\) has no return type specified\\.$#"
-			count: 1
-			path: src/Controller/Api/LoginController.php
-
-		-
 			message: "#^Access to an undefined property Cake\\\\Datasource\\\\EntityInterface\\:\\:\\$email\\.$#"
 			count: 1
 			path: src/Controller/PaymentsController.php
