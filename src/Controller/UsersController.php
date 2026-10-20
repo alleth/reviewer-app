@@ -43,6 +43,14 @@ class UsersController extends AppController
     private const DEVICE_SWITCH_LIMIT = 4;
 
     /**
+     * A bcrypt hash of a random, discarded secret (same algorithm and cost as
+     * real passwords). Sign-in checks it when there's no password to check —
+     * no such account, or a Google-only one — so those answers take as long as
+     * a wrong password (H5).
+     */
+    private const DUMMY_PASSWORD_HASH = '$2y$10$djXBqlyagv7dgrvTWEssZuf9R1ZNdXs8D2YMyw/IJXuPTDXkUrLT6';
+
+    /**
      * Sign-in escalation (H4), on failures for the account (username and
      * email share one bucket) or, for an unknown name, the typed identifier:
      * from 5 in the last hour a 30 s wait after each failure; from 10 a
@@ -750,7 +758,7 @@ class UsersController extends AppController
     /**
      * Password sign-in by username or email. See CLAUDE.md (Authentication) for
      * the escalating delays and step-up (H4), the device-switch challenge and
-     * the email-verification step.
+     * the email-verification step. Every failure gets the same answer (H5).
      */
     public function login(): Response
     {
@@ -795,7 +803,13 @@ class UsersController extends AppController
                 return $this->tooMany($escalation['wait']);
             }
 
-            if ($user && $user->user_pass !== null && password_verify($password, $user->user_pass)) {
+            // Always one bcrypt check, so an unknown or Google-only account
+            // answers in the same time as a wrong password (H5).
+            $storedHash = $user?->user_pass;
+            $passwordOk = password_verify($password, $storedHash ?? self::DUMMY_PASSWORD_HASH)
+                && $storedHash !== null;
+
+            if ($user && $passwordOk) {
                 // After repeated failures a correct password also needs the
                 // emailed code (step-up). It only shows after a correct
                 // password, so it reveals nothing about the account.
@@ -834,24 +848,13 @@ class UsersController extends AppController
                     $this->limiter()->clear('login_fail', $failKey);
                     $response = ['success' => true, 'user' => $this->withPurchases($user)];
                 }
-            } elseif ($user && $user->user_pass === null) {
-                // Google-only account: no password was ever set for it. Give the frontend
-                // enough to render a personalized "continue with Google to finish setup"
-                // prompt instead of a plain error.
-                $response = [
-                    'success' => false,
-                    'needsGoogleSetup' => true,
-                    'message' => 'For your security, this account needs a one-time setup. '
-                        . 'Continue with Google to finish it.',
-                    'account' => [
-                        'email' => $user->email,
-                        'fname' => $user->fname,
-                        'lname' => $user->lname,
-                    ],
-                ];
             } else {
-                // Wrong password, or unknown account: counts toward the
-                // escalation and the per-IP limit.
+                // Wrong password, unknown account, or a Google-only account
+                // (no password to match): one answer for all three, counted
+                // toward the escalation and the per-IP limit, so neither the
+                // reply nor the limiter reveals which it was (H5). The
+                // frontend's error already points Google users to the Google
+                // button.
                 $this->limiter()->hit('login_fail', $failKey);
                 $this->limiter()->hit('login_fail_ip', $this->ipKey(), true);
                 $response = ['success' => false, 'message' => 'Invalid username or password'];
