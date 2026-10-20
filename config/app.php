@@ -177,7 +177,14 @@ return [
         'errorLevel' => E_ALL,
         // Friendly JSON 503 for "DB asleep" errors instead of a raw SQLSTATE.
         'exceptionRenderer' => AppExceptionRenderer::class,
-        'skipLog' => [],
+        // 404s (mostly scanners) are still answered, just not logged as
+        // errors, so they don't bury real ones (ACTION_PLAN L12).
+        'skipLog' => [
+            'Cake\Routing\Exception\MissingRouteException',
+            'Cake\Http\Exception\MissingControllerException',
+            'Cake\Controller\Exception\MissingActionException',
+            'Cake\Http\Exception\NotFoundException',
+        ],
         'log' => true,
         'trace' => true,
         'ignoredDeprecationPaths' => [],
@@ -455,7 +462,11 @@ return [
     'Session' => [
         'defaults' => 'php',
         'ini' => [
-            'session.cookie_samesite' => 'None',
+            // Lax: the SPA and the API are same-site (career-pass.org /
+            // api.career-pass.org, and localhost in dev), so the cookie still
+            // flows, and browsers won't send it on cross-site POSTs — a second
+            // CSRF layer behind AjaxHeaderMiddleware (H6, S13).
+            'session.cookie_samesite' => 'Lax',
             'session.cookie_secure' => 1,
             'session.cookie_httponly' => 1,
         ],

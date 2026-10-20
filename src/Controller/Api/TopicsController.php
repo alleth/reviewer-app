@@ -7,8 +7,8 @@ use App\Model\Table\TopicsTable;
 use Cake\Http\Response;
 
 /**
- * Reviewer topics. Reads need a session and an active pass, and the write
- * actions are disabled (403) — both enforced by Api\AppController.
+ * Reviewer topics, read-only. Reads need a session and an active pass
+ * (enforced by Api\AppController); there are no write routes or actions (H6).
  */
 class TopicsController extends AppController
 {
@@ -50,54 +50,5 @@ class TopicsController extends AppController
         $topic = $this->Topics->get((int)$id, contain: ['TopicReviews']);
 
         return $this->json(['success' => true, 'data' => $topic]);
-    }
-
-    /**
-     * Disabled by Api\AppController (403); kept only for the resource route.
-     *
-     * @return \Cake\Http\Response
-     */
-    public function add(): Response
-    {
-        $this->request->allowMethod(['post']);
-        $topic = $this->Topics->patchEntity($this->Topics->newEmptyEntity(), $this->request->getData());
-        if (!$this->Topics->save($topic)) {
-            return $this->json(['success' => false, 'errors' => $topic->getErrors()], 422);
-        }
-
-        return $this->json(['success' => true, 'data' => $topic], 201);
-    }
-
-    /**
-     * Disabled by Api\AppController (403); kept only for the resource route.
-     *
-     * @param string $id Topic id from the route.
-     * @return \Cake\Http\Response
-     */
-    public function edit(string $id): Response
-    {
-        $this->request->allowMethod(['put', 'patch']);
-        $topic = $this->Topics->patchEntity($this->Topics->get((int)$id), $this->request->getData());
-        if (!$this->Topics->save($topic)) {
-            return $this->json(['success' => false, 'errors' => $topic->getErrors()], 422);
-        }
-
-        return $this->json(['success' => true, 'data' => $topic]);
-    }
-
-    /**
-     * Disabled by Api\AppController (403); kept only for the resource route.
-     *
-     * @param string $id Topic id from the route.
-     * @return \Cake\Http\Response
-     */
-    public function delete(string $id): Response
-    {
-        $this->request->allowMethod(['delete']);
-        if (!$this->Topics->delete($this->Topics->get((int)$id))) {
-            return $this->json(['success' => false, 'message' => 'Could not delete topic'], 500);
-        }
-
-        return $this->json(['success' => true]);
     }
 }

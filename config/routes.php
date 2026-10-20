@@ -38,13 +38,12 @@ return function (RouteBuilder $routes): void {
             ['controller' => 'Questions', 'action' => 'answer'],
             ['pass' => ['id'], 'id' => '\d+'],
         );
-        $builder->resources('Topics');
+        // Read-only: content comes from bin/cake import_questions, so there are
+        // no write routes (H6).
+        $builder->resources('Topics', ['only' => ['index', 'view']]);
     });
 
-    // Default routes
-    $routes->scope('/', function (RouteBuilder $builder): void {
-        $builder->connect('/', ['controller' => 'Pages', 'action' => 'display', 'home']);
-        $builder->connect('/pages/*', 'Pages::display');
-        $builder->fallbacks();
-    });
+    // Nothing else is routed: no fallbacks() and no skeleton pages (H6), so a
+    // controller method is reachable only through a route listed above. Any
+    // other URL is a 404.
 };

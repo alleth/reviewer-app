@@ -15,7 +15,8 @@ use Cake\Http\Response;
  *   account's email is verified; otherwise null, with the reason in
  *   $sessionDenialReason.
  * - notLoggedIn(): the standard 401 for a failed activeUserId().
- * - requireAjaxHeader(): the per-action CSRF gate.
+ * - requireAjaxHeader(): the per-action copy of the CSRF gate (the middleware
+ *   AjaxHeaderMiddleware enforces it for every state-changing request).
  * - json(): a JSON response.
  */
 trait SessionAuthTrait
@@ -89,11 +90,8 @@ trait SessionAuthTrait
     }
 
     /**
-     * Lightweight CSRF gate for state-changing actions. This app has no CSRF
-     * middleware (removed entirely so the cross-origin SPA can POST at all) and
-     * session cookies are SameSite=None (required for the same reason) — so
-     * without this, any other website could trigger these actions using a
-     * visitor's session cookie via a plain <form> POST.
+     * Per-action copy of the CSRF check that AjaxHeaderMiddleware applies to
+     * every state-changing request (H6); kept as a second layer.
      *
      * A plain HTML form cannot set custom request headers, only fetch/XHR can —
      * and a cross-origin fetch/XHR triggers a CORS preflight, which

@@ -17,6 +17,7 @@ declare(strict_types=1);
 namespace App\Test\TestCase;
 
 use App\Application;
+use App\Middleware\AjaxHeaderMiddleware;
 use App\Middleware\CorsMiddleware;
 use Cake\Core\Configure;
 use Cake\Error\Middleware\ErrorHandlerMiddleware;
@@ -70,9 +71,9 @@ class ApplicationTest extends TestCase
      *
      * CorsMiddleware is added first (before ErrorHandlerMiddleware) so preflight
      * OPTIONS requests are short-circuited before routing — see CLAUDE.md
-     * "CORS & Middleware". No CsrfProtectionMiddleware: this app removed CSRF
-     * middleware entirely in favor of a per-action AJAX-header gate (see
-     * UsersController::requireAjaxHeader()).
+     * "CORS & Middleware". Then AjaxHeaderMiddleware, the CSRF check (H6), so
+     * its 403 still gets CORS headers. No CsrfProtectionMiddleware: the header
+     * check replaces Cake's token scheme.
      *
      * @return void
      */
@@ -85,10 +86,25 @@ class ApplicationTest extends TestCase
 
         $this->assertInstanceOf(CorsMiddleware::class, $middleware->current());
         $middleware->seek(1);
-        $this->assertInstanceOf(ErrorHandlerMiddleware::class, $middleware->current());
+        $this->assertInstanceOf(AjaxHeaderMiddleware::class, $middleware->current());
         $middleware->seek(2);
-        $this->assertInstanceOf(AssetMiddleware::class, $middleware->current());
+        $this->assertInstanceOf(ErrorHandlerMiddleware::class, $middleware->current());
         $middleware->seek(3);
+        $this->assertInstanceOf(AssetMiddleware::class, $middleware->current());
+        $middleware->seek(4);
         $this->assertInstanceOf(RoutingMiddleware::class, $middleware->current());
+    }
+
+    /**
+     * The session cookie is SameSite=Lax (H6, S13): the SPA and the API are
+     * same-site, and browsers then keep it off cross-site POSTs.
+     *
+     * @return void
+     */
+    public function testSessionCookieIsSameSiteLax()
+    {
+        $this->assertSame('Lax', Configure::read('Session.ini')['session.cookie_samesite'] ?? null);
+        $this->assertSame(1, Configure::read('Session.ini')['session.cookie_secure'] ?? null);
+        $this->assertSame(1, Configure::read('Session.ini')['session.cookie_httponly'] ?? null);
     }
 }

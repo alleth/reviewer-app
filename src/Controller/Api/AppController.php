@@ -16,19 +16,13 @@ use Cake\I18n\DateTime;
  *   question bank is paid content and must not be scrapeable.
  *   No usable session → 401 `{reason: signed_out | signed_in_elsewhere}`;
  *   signed in without a pass → 403 `{reason: no_active_pass}`.
- * - **Writes** (`add` / `edit` / `delete`) are disabled (403): content is
- *   loaded with `bin/cake import_questions`, there's no admin UI, and nothing
- *   on the frontend calls them.
+ * - There are **no writes**: content is loaded with `bin/cake import_questions`
+ *   and the routes are read-only (H6), so no write action exists to reach.
  *
  * OPTIONS preflights never reach here — `CorsMiddleware` short-circuits them.
  */
 class AppController extends BaseController
 {
-    /**
-     * @var list<string>
-     */
-    protected array $writeActions = ['add', 'edit', 'delete'];
-
     /**
      * @param \Cake\Event\EventInterface $event The beforeFilter event.
      * @return \Cake\Http\Response|null A JSON 401/403 to halt dispatch, or null to continue.
@@ -36,10 +30,6 @@ class AppController extends BaseController
     public function beforeFilter(EventInterface $event): ?Response
     {
         parent::beforeFilter($event);
-
-        if (in_array($this->request->getParam('action'), $this->writeActions, true)) {
-            return $this->json(['success' => false, 'message' => 'This endpoint is not available.'], 403);
-        }
 
         $userId = $this->activeUserId();
         if ($userId === null) {
